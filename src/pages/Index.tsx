@@ -10,6 +10,44 @@ interface LoadPoint {
   weight: number;
 }
 
+// Simple damage calculation for analytics
+const calculateDamageState = (bridgeType: string, loadPoints: LoadPoint[]) => {
+  const bridgeCapacities = {
+    truss: { max: 2000, safe: 1600, critical: 1800 },
+    arch: { max: 3000, safe: 2400, critical: 2700 },
+    beam: { max: 1500, safe: 1200, critical: 1350 }
+  };
+
+  const capacity = bridgeCapacities[bridgeType as keyof typeof bridgeCapacities];
+  const totalWeight = loadPoints.reduce((sum, load) => sum + load.weight, 0);
+  
+  let integrity = 1;
+  let failureMode = 'none';
+  let warningLevel = 'safe';
+  
+  if (totalWeight > capacity.max) {
+    integrity = Math.max(0, 1 - (totalWeight - capacity.max) / capacity.max);
+    failureMode = 'collapse';
+    warningLevel = 'failure';
+  } else if (totalWeight > capacity.critical) {
+    integrity = 0.3 + (0.7 * (capacity.max - totalWeight) / (capacity.max - capacity.critical));
+    failureMode = bridgeType === 'beam' ? 'bending' : bridgeType === 'truss' ? 'buckling' : 'shear';
+    warningLevel = 'critical';
+  } else if (totalWeight > capacity.safe) {
+    integrity = 0.7 + (0.3 * (capacity.critical - totalWeight) / (capacity.critical - capacity.safe));
+    warningLevel = 'danger';
+  } else if (totalWeight > capacity.safe * 0.8) {
+    warningLevel = 'caution';
+  }
+
+  return {
+    cracks: integrity < 0.8 ? [{id: '1', severity: 1 - integrity}] : [],
+    overallIntegrity: integrity,
+    failureMode,
+    warningLevel
+  };
+};
+
 const Index = () => {
   const [bridgeType, setBridgeType] = useState<'truss' | 'arch' | 'beam'>('truss');
   const [loadPoints, setLoadPoints] = useState<LoadPoint[]>([]);
@@ -58,7 +96,7 @@ const Index = () => {
           {/* Analytics Panel */}
           {showAnalytics && (
             <div className="lg:col-span-1 space-y-4 overflow-y-auto">
-              <LoadAnalytics bridgeType={bridgeType} loadPoints={loadPoints} />
+              <LoadAnalytics bridgeType={bridgeType} loadPoints={loadPoints} damageState={calculateDamageState(bridgeType, loadPoints)} />
               
               {/* Educational Info */}
               <Card className="bg-card/90 backdrop-blur-sm shadow-panel border-border">

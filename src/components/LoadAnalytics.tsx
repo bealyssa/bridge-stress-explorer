@@ -8,12 +8,20 @@ interface LoadPoint {
   weight: number;
 }
 
+interface DamageState {
+  cracks: any[];
+  overallIntegrity: number;
+  failureMode: string;
+  warningLevel: string;
+}
+
 interface LoadAnalyticsProps {
   bridgeType: 'truss' | 'arch' | 'beam';
   loadPoints: LoadPoint[];
+  damageState?: DamageState;
 }
 
-const LoadAnalytics: React.FC<LoadAnalyticsProps> = ({ bridgeType, loadPoints }) => {
+const LoadAnalytics: React.FC<LoadAnalyticsProps> = ({ bridgeType, loadPoints, damageState }) => {
   // Bridge capacity limits (simplified)
   const bridgeCapacities = {
     truss: { max: 2000, safe: 1600 },
@@ -135,6 +143,69 @@ const LoadAnalytics: React.FC<LoadAnalyticsProps> = ({ bridgeType, loadPoints })
           )}
         </CardContent>
       </Card>
+
+      {/* Damage Assessment */}
+      {damageState && (
+        <Card className="bg-card/90 backdrop-blur-sm shadow-panel border-border">
+          <CardHeader>
+            <CardTitle className="text-lg engineering-title">Damage Assessment</CardTitle>
+            <CardDescription>Structural integrity and failure analysis</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <div className="flex justify-between items-center">
+                <span className="text-sm font-medium">Structural Integrity</span>
+                <span className={`text-sm font-mono ${
+                  damageState.overallIntegrity > 0.7 ? 'text-stress-safe' :
+                  damageState.overallIntegrity > 0.4 ? 'text-stress-warning' :
+                  'text-stress-critical'
+                }`}>
+                  {Math.round(damageState.overallIntegrity * 100)}%
+                </span>
+              </div>
+              <Progress 
+                value={damageState.overallIntegrity * 100} 
+                className="h-2"
+              />
+            </div>
+
+            <div className="flex justify-between items-center">
+              <span className="text-sm font-medium">Active Cracks</span>
+              <span className="text-sm font-mono">{damageState.cracks.length}</span>
+            </div>
+
+            {damageState.failureMode !== 'none' && (
+              <div className="p-3 bg-destructive/10 border border-destructive/20 rounded">
+                <div className="font-semibold text-destructive text-sm">Failure Mode Detected</div>
+                <div className="text-xs text-destructive/80 mt-1">
+                  {damageState.failureMode === 'bending' && 'Excessive deflection causing structural failure'}
+                  {damageState.failureMode === 'shear' && 'Shear force exceeding material capacity'}
+                  {damageState.failureMode === 'buckling' && 'Compression members buckling under load'}
+                  {damageState.failureMode === 'collapse' && 'Complete structural collapse imminent'}
+                </div>
+              </div>
+            )}
+
+            <div className="pt-2 border-t border-border">
+              <h4 className="font-semibold text-sm mb-2">Real-World Implications</h4>
+              <div className="text-xs text-muted-foreground space-y-1">
+                {damageState.overallIntegrity > 0.8 && (
+                  <p>✅ Bridge is operating within safe parameters. Regular inspections recommended.</p>
+                )}
+                {damageState.overallIntegrity <= 0.8 && damageState.overallIntegrity > 0.5 && (
+                  <p>⚠️ Increased monitoring required. Load restrictions should be considered.</p>
+                )}
+                {damageState.overallIntegrity <= 0.5 && damageState.overallIntegrity > 0.2 && (
+                  <p>🚫 Bridge should be closed to traffic. Immediate structural repairs needed.</p>
+                )}
+                {damageState.overallIntegrity <= 0.2 && (
+                  <p>💥 Critical failure! Bridge collapse is imminent. Emergency evacuation required.</p>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Bridge Specifications */}
       <Card className="bg-card/90 backdrop-blur-sm shadow-panel border-border">
