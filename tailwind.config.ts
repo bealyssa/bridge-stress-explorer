@@ -61,7 +61,30 @@ export default {
 					'accent-foreground': 'hsl(var(--sidebar-accent-foreground))',
 					border: 'hsl(var(--sidebar-border))',
 					ring: 'hsl(var(--sidebar-ring))'
+				},
+				stress: {
+					safe: 'hsl(var(--stress-safe))',
+					warning: 'hsl(var(--stress-warning))',
+					danger: 'hsl(var(--stress-danger))',
+					critical: 'hsl(var(--stress-critical))'
 				}
+			},
+			backgroundImage: {
+				'gradient-primary': 'var(--gradient-primary)',
+				'gradient-simulation': 'var(--gradient-simulation)',
+				'gradient-stress': 'var(--gradient-stress)'
+			},
+			boxShadow: {
+				'panel': 'var(--shadow-panel)',
+				'floating': 'var(--shadow-floating)',
+				'glow': 'var(--shadow-glow)'
+			},
+			transitionTimingFunction: {
+				'smooth': 'var(--transition-smooth)',
+				'bounce': 'var(--transition-bounce)'
+			},
+			fontFamily: {
+				'engineering': ['JetBrains Mono', 'Fira Code', 'Consolas', 'monospace']
 			},
 			borderRadius: {
 				lg: 'var(--radius)',
