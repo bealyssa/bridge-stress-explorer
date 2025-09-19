@@ -612,13 +612,13 @@ const BeamBridge: React.FC<{ loadPoints: LoadPoint[]; damageState: DamageState }
   );
 };
 
-// Vehicle Component with improved real-time collision detection
+// Vehicle Component with improved real-time collision detection (Memoized)
 const VehicleComponent: React.FC<{ 
   initialVehicle: Vehicle; 
   bridgeType: string; 
   damageState: DamageState;
   allVehicles: React.MutableRefObject<Vehicle[]>;
-}> = ({ initialVehicle, bridgeType, damageState, allVehicles }) => {
+}> = React.memo(({ initialVehicle, bridgeType, damageState, allVehicles }) => {
   const meshRef = useRef<THREE.Group>(null);
   const vehicleData = useRef(initialVehicle);
   
@@ -789,10 +789,10 @@ const VehicleComponent: React.FC<{
       </mesh>
     </group>
   );
-};
+});
 
-// Load Point Visualization
-const LoadPoint: React.FC<{ load: LoadPoint }> = ({ load }) => {
+// Load Point Visualization (Memoized)
+const LoadPoint: React.FC<{ load: LoadPoint }> = React.memo(({ load }) => {
   const meshRef = useRef<THREE.Mesh>(null);
   
   useFrame((state) => {
@@ -820,7 +820,7 @@ const LoadPoint: React.FC<{ load: LoadPoint }> = ({ load }) => {
       </Text>
     </group>
   );
-};
+});
 
 // Click Handler for Adding Loads
 const ClickHandler: React.FC<{ onAddLoad: (position: [number, number, number]) => void }> = ({ onAddLoad }) => {
@@ -847,8 +847,8 @@ const ClickHandler: React.FC<{ onAddLoad: (position: [number, number, number]) =
   );
 };
 
-// Main Bridge Component with damage integration and vehicles
-const Bridge: React.FC<BridgeProps> = ({ bridgeType, loadPoints, onAddLoad, damageState, vehicles }) => {
+// Main Bridge Component with damage integration and vehicles (Memoized)
+const Bridge: React.FC<BridgeProps> = React.memo(({ bridgeType, loadPoints, onAddLoad, damageState, vehicles }) => {
   const renderBridge = () => {
     switch (bridgeType) {
       case 'truss':
@@ -871,10 +871,10 @@ const Bridge: React.FC<BridgeProps> = ({ bridgeType, loadPoints, onAddLoad, dama
       <ClickHandler onAddLoad={onAddLoad} />
     </>
   );
-};
+});
 
-// Environment Components
-const Environment: React.FC = () => {
+// Environment Components (Memoized to prevent unnecessary re-renders)
+const Environment: React.FC = React.memo(() => {
   const waterRef = useRef<THREE.Mesh>(null);
   
   useFrame((state) => {
@@ -1165,7 +1165,7 @@ const Environment: React.FC = () => {
       })}
     </>
   );
-};
+});
 
 // Main Simulator Component
 interface BridgeSimulatorProps {
@@ -1173,13 +1173,15 @@ interface BridgeSimulatorProps {
   loadPoints?: LoadPoint[];
   onBridgeTypeChange?: (type: 'truss' | 'arch' | 'beam') => void;
   onLoadPointsChange?: (loads: LoadPoint[]) => void;
+  onVehicleDataChange?: (vehicles: Vehicle[], dynamicLoad: number, damageState: DamageState) => void;
 }
 
 const BridgeSimulator: React.FC<BridgeSimulatorProps> = ({
   bridgeType: externalBridgeType,
   loadPoints: externalLoadPoints,
   onBridgeTypeChange,
-  onLoadPointsChange
+  onLoadPointsChange,
+  onVehicleDataChange
 }) => {
   const [internalBridgeType, setInternalBridgeType] = useState<'truss' | 'arch' | 'beam'>('truss');
   const [internalLoadPoints, setInternalLoadPoints] = useState<LoadPoint[]>([]);
@@ -1188,6 +1190,63 @@ const BridgeSimulator: React.FC<BridgeSimulatorProps> = ({
 
   const bridgeType = externalBridgeType || internalBridgeType;
   const loadPoints = externalLoadPoints || internalLoadPoints;
+  
+  // Calculate dynamic vehicle loads in real-time
+  const calculateDynamicLoad = useCallback(() => {
+    const bridgeStart = -14;
+    const bridgeEnd = 14;
+    let dynamicLoad = 0;
+    const vehiclesOnBridge: Vehicle[] = [];
+    
+    vehiclesRef.current.forEach(vehicle => {
+      const x = vehicle.position[0];
+      if (x >= bridgeStart && x <= bridgeEnd) {
+        vehicle.isOnBridge = true;
+        vehiclesOnBridge.push(vehicle);
+        dynamicLoad += vehicle.weight;
+      } else {
+        vehicle.isOnBridge = false;
+      }
+    });
+    
+    return { dynamicLoad, vehiclesOnBridge };
+  }, []);
+  
+  // Calculate total damage state including vehicles
+  const calculateTotalDamageState = useCallback(() => {
+    const { dynamicLoad } = calculateDynamicLoad();
+    const staticLoad = loadPoints.reduce((sum, load) => sum + load.weight, 0);
+    const totalLoad = staticLoad + dynamicLoad;
+    
+    // Create virtual load points for vehicles on bridge
+    const vehicleLoadPoints: LoadPoint[] = vehiclesRef.current
+      .filter(v => v.isOnBridge)
+      .map(v => ({
+        id: `vehicle-${v.id}`,
+        position: v.position,
+        weight: v.weight
+      }));
+    
+    const allLoadPoints = [...loadPoints, ...vehicleLoadPoints];
+    return calculateDamage(bridgeType, allLoadPoints);
+  }, [bridgeType, loadPoints, calculateDynamicLoad]);
+  
+  // Update analytics in real-time
+  React.useEffect(() => {
+    const updateAnalytics = () => {
+      const { dynamicLoad, vehiclesOnBridge } = calculateDynamicLoad();
+      const damageState = calculateTotalDamageState();
+      
+      if (onVehicleDataChange) {
+        onVehicleDataChange(vehiclesOnBridge, dynamicLoad, damageState);
+      }
+    };
+    
+    // Update every frame for real-time analytics
+    const interval = setInterval(updateAnalytics, 100); // 10 FPS for smooth updates but not too heavy
+    
+    return () => clearInterval(interval);
+  }, [calculateDynamicLoad, calculateTotalDamageState, onVehicleDataChange]);
   
   // Initialize vehicles
   React.useEffect(() => {
@@ -1347,8 +1406,10 @@ const BridgeSimulator: React.FC<BridgeSimulatorProps> = ({
   //   ));
   // }, []);
   
-  // Calculate damage state (vehicles don't affect this for performance)
+  // Calculate damage state (now includes vehicles for real-time updates)
   const damageState = useMemo(() => {
+    // Use static load points only for the visual rendering
+    // Real-time analytics will be handled separately via callbacks
     return calculateDamage(bridgeType, loadPoints);
   }, [bridgeType, loadPoints]);
 

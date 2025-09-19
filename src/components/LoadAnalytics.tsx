@@ -8,6 +8,17 @@ interface LoadPoint {
   weight: number;
 }
 
+interface Vehicle {
+  id: string;
+  position: [number, number, number];
+  velocity: [number, number, number];
+  type: 'car' | 'truck' | 'bus';
+  weight: number;
+  color: string;
+  direction: 1 | -1;
+  isOnBridge: boolean;
+}
+
 interface DamageState {
   cracks: any[];
   overallIntegrity: number;
@@ -19,9 +30,17 @@ interface LoadAnalyticsProps {
   bridgeType: 'truss' | 'arch' | 'beam';
   loadPoints: LoadPoint[];
   damageState?: DamageState;
+  vehiclesOnBridge?: Vehicle[];
+  dynamicLoad?: number;
 }
 
-const LoadAnalytics: React.FC<LoadAnalyticsProps> = ({ bridgeType, loadPoints, damageState }) => {
+const LoadAnalytics: React.FC<LoadAnalyticsProps> = ({ 
+  bridgeType, 
+  loadPoints, 
+  damageState, 
+  vehiclesOnBridge = [], 
+  dynamicLoad = 0 
+}) => {
   // Bridge capacity limits (simplified)
   const bridgeCapacities = {
     truss: { max: 2000, safe: 1600 },
@@ -29,7 +48,8 @@ const LoadAnalytics: React.FC<LoadAnalyticsProps> = ({ bridgeType, loadPoints, d
     beam: { max: 1500, safe: 1200 }
   };
 
-  const totalWeight = loadPoints.reduce((sum, load) => sum + load.weight, 0);
+  const staticWeight = loadPoints.reduce((sum, load) => sum + load.weight, 0);
+  const totalWeight = staticWeight + dynamicLoad;
   const capacity = bridgeCapacities[bridgeType];
   const loadPercentage = (totalWeight / capacity.max) * 100;
   const safetyMargin = capacity.safe - totalWeight;
@@ -49,9 +69,20 @@ const LoadAnalytics: React.FC<LoadAnalyticsProps> = ({ bridgeType, loadPoints, d
     critical: 'text-stress-critical'
   };
 
-  // Calculate maximum stress point
+  // Calculate maximum stress point including vehicles
   const getMaxStressLocation = () => {
-    if (loadPoints.length === 0) return null;
+    const allLoads = [...loadPoints];
+    
+    // Add vehicle loads as temporary load points
+    vehiclesOnBridge.forEach(vehicle => {
+      allLoads.push({
+        id: `vehicle-${vehicle.id}`,
+        position: vehicle.position,
+        weight: vehicle.weight
+      });
+    });
+    
+    if (allLoads.length === 0) return null;
     
     // For beam bridges, find the location with highest moment
     if (bridgeType === 'beam') {
@@ -60,7 +91,7 @@ const LoadAnalytics: React.FC<LoadAnalyticsProps> = ({ bridgeType, loadPoints, d
       
       for (let x = -4; x <= 4; x += 0.1) {
         let moment = 0;
-        loadPoints.forEach(load => {
+        allLoads.forEach(load => {
           const distance = Math.abs(x - load.position[0]);
           moment += load.weight * Math.max(0, 4 - distance);
         });
@@ -73,8 +104,8 @@ const LoadAnalytics: React.FC<LoadAnalyticsProps> = ({ bridgeType, loadPoints, d
     }
     
     // For truss and arch, find the most loaded point
-    const centerLoad = loadPoints.filter(load => Math.abs(load.position[0]) < 1);
-    const totalCenterWeight = centerLoad.reduce((sum, load) => sum + load.weight, 0);
+    const centerLoads = allLoads.filter(load => Math.abs(load.position[0]) < 1);
+    const totalCenterWeight = centerLoads.reduce((sum, load) => sum + load.weight, 0);
     return { x: '0.0', stress: totalCenterWeight };
   };
 
@@ -84,11 +115,21 @@ const LoadAnalytics: React.FC<LoadAnalyticsProps> = ({ bridgeType, loadPoints, d
     <div className="space-y-4">
       <Card className="bg-card/90 backdrop-blur-sm shadow-panel border-border">
         <CardHeader>
-          <CardTitle className="text-lg engineering-title">Structural Analysis</CardTitle>
-          <CardDescription>Real-time load distribution and stress analysis</CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-lg engineering-title">Structural Analysis</CardTitle>
+              <CardDescription>Real-time load distribution and stress analysis</CardDescription>
+            </div>
+            {(vehiclesOnBridge.length > 0 || dynamicLoad > 0) && (
+              <div className="flex items-center gap-1 text-xs text-orange-500">
+                <div className="w-2 h-2 bg-orange-500 rounded-full animate-pulse"></div>
+                LIVE
+              </div>
+            )}
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Total Load */}
+          {/* Total Load with breakdown */}
           <div className="space-y-2">
             <div className="flex justify-between items-center">
               <span className="text-sm font-medium">Total Load</span>
@@ -104,6 +145,20 @@ const LoadAnalytics: React.FC<LoadAnalyticsProps> = ({ bridgeType, loadPoints, d
               <span>0 kg</span>
               <span>Safe: {capacity.safe} kg</span>
               <span>Max: {capacity.max} kg</span>
+            </div>
+            
+            {/* Load breakdown */}
+            <div className="grid grid-cols-2 gap-2 text-xs mt-2">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Static:</span>
+                <span className="font-mono">{staticWeight} kg</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Vehicles:</span>
+                <span className={`font-mono ${dynamicLoad > 0 ? 'text-orange-500' : ''}`}>
+                  {dynamicLoad} kg
+                </span>
+              </div>
             </div>
           </div>
 
@@ -128,6 +183,34 @@ const LoadAnalytics: React.FC<LoadAnalyticsProps> = ({ bridgeType, loadPoints, d
             <span className="text-sm font-medium">Active Load Points</span>
             <span className="text-sm font-mono">{loadPoints.length}</span>
           </div>
+
+          {/* Vehicles on Bridge */}
+          <div className="flex justify-between items-center">
+            <span className="text-sm font-medium">Vehicles on Bridge</span>
+            <span className={`text-sm font-mono ${vehiclesOnBridge.length > 0 ? 'text-orange-500' : ''}`}>
+              {vehiclesOnBridge.length}
+            </span>
+          </div>
+
+          {/* Real-time vehicle details */}
+          {vehiclesOnBridge.length > 0 && (
+            <div className="pt-2 border-t border-border">
+              <h4 className="text-xs font-semibold mb-2 text-muted-foreground">Active Vehicles:</h4>
+              <div className="space-y-1 max-h-20 overflow-y-auto">
+                {vehiclesOnBridge.map((vehicle) => (
+                  <div key={vehicle.id} className="flex justify-between items-center text-xs">
+                    <span className="capitalize flex items-center gap-1">
+                      {vehicle.type === 'car' && '🚗'}
+                      {vehicle.type === 'truck' && '🚛'}
+                      {vehicle.type === 'bus' && '🚌'}
+                      {vehicle.type}
+                    </span>
+                    <span className="font-mono text-orange-500">{vehicle.weight}kg</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {maxStress && (
             <div className="pt-2 border-t border-border">
@@ -206,6 +289,57 @@ const LoadAnalytics: React.FC<LoadAnalyticsProps> = ({ bridgeType, loadPoints, d
           </CardContent>
         </Card>
       )}
+
+      {/* Traffic Flow Analysis */}
+      <Card className="bg-card/90 backdrop-blur-sm shadow-panel border-border">
+        <CardHeader>
+          <CardTitle className="text-lg engineering-title">Traffic Flow</CardTitle>
+          <CardDescription>Real-time vehicle monitoring</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-3 gap-4 text-center">
+            <div className="space-y-1">
+              <div className="text-2xl font-mono text-blue-500">
+                {vehiclesOnBridge.filter(v => v.type === 'car').length}
+              </div>
+              <div className="text-xs text-muted-foreground">🚗 Cars</div>
+            </div>
+            <div className="space-y-1">
+              <div className="text-2xl font-mono text-orange-500">
+                {vehiclesOnBridge.filter(v => v.type === 'truck').length}
+              </div>
+              <div className="text-xs text-muted-foreground">🚛 Trucks</div>
+            </div>
+            <div className="space-y-1">
+              <div className="text-2xl font-mono text-purple-500">
+                {vehiclesOnBridge.filter(v => v.type === 'bus').length}
+              </div>
+              <div className="text-xs text-muted-foreground">🚌 Buses</div>
+            </div>
+          </div>
+
+          {dynamicLoad > 0 && (
+            <div className="pt-2 border-t border-border">
+              <div className="flex justify-between items-center">
+                <span className="text-sm font-medium">Traffic Load Impact</span>
+                <span className="text-sm font-mono text-orange-500">
+                  +{((dynamicLoad / (staticWeight + dynamicLoad)) * 100).toFixed(1)}%
+                </span>
+              </div>
+              <div className="text-xs text-muted-foreground mt-1">
+                Vehicles contributing {dynamicLoad}kg to total bridge load
+              </div>
+            </div>
+          )}
+
+          {vehiclesOnBridge.length === 0 && (
+            <div className="text-center py-4 text-muted-foreground">
+              <div className="text-2xl mb-2">🌉</div>
+              <div className="text-sm">No vehicles on bridge</div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Bridge Specifications */}
       <Card className="bg-card/90 backdrop-blur-sm shadow-panel border-border">

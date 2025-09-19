@@ -10,6 +10,24 @@ interface LoadPoint {
   weight: number;
 }
 
+interface Vehicle {
+  id: string;
+  position: [number, number, number];
+  velocity: [number, number, number];
+  type: 'car' | 'truck' | 'bus';
+  weight: number;
+  color: string;
+  direction: 1 | -1;
+  isOnBridge: boolean;
+}
+
+interface DamageState {
+  cracks: any[];
+  overallIntegrity: number;
+  failureMode: string;
+  warningLevel: string;
+}
+
 // Simple damage calculation for analytics
 const calculateDamageState = (bridgeType: string, loadPoints: LoadPoint[]) => {
   const bridgeCapacities = {
@@ -52,6 +70,18 @@ const Index = () => {
   const [bridgeType, setBridgeType] = useState<'truss' | 'arch' | 'beam'>('truss');
   const [loadPoints, setLoadPoints] = useState<LoadPoint[]>([]);
   const [showAnalytics, setShowAnalytics] = useState(true);
+  
+  // Real-time vehicle and damage state
+  const [vehiclesOnBridge, setVehiclesOnBridge] = useState<Vehicle[]>([]);
+  const [dynamicLoad, setDynamicLoad] = useState(0);
+  const [realTimeDamageState, setRealTimeDamageState] = useState<DamageState | null>(null);
+  
+  // Handle real-time updates from the simulator
+  const handleVehicleDataChange = (vehicles: Vehicle[], dynLoad: number, damageState: DamageState) => {
+    setVehiclesOnBridge(vehicles);
+    setDynamicLoad(dynLoad);
+    setRealTimeDamageState(damageState);
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -90,13 +120,20 @@ const Index = () => {
               loadPoints={loadPoints}
               onBridgeTypeChange={setBridgeType}
               onLoadPointsChange={setLoadPoints}
+              onVehicleDataChange={handleVehicleDataChange}
             />
           </div>
 
           {/* Analytics Panel */}
           {showAnalytics && (
             <div className="lg:col-span-1 space-y-4 overflow-y-auto">
-              <LoadAnalytics bridgeType={bridgeType} loadPoints={loadPoints} damageState={calculateDamageState(bridgeType, loadPoints)} />
+              <LoadAnalytics 
+                bridgeType={bridgeType} 
+                loadPoints={loadPoints} 
+                damageState={realTimeDamageState || calculateDamageState(bridgeType, loadPoints)}
+                vehiclesOnBridge={vehiclesOnBridge}
+                dynamicLoad={dynamicLoad}
+              />
               
               {/* Educational Info */}
               <Card className="bg-card/90 backdrop-blur-sm shadow-panel border-border">
