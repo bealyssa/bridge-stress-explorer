@@ -32,8 +32,7 @@ interface DamageState {
 const calculateDamageState = (bridgeType: string, loadPoints: LoadPoint[]) => {
   const bridgeCapacities = {
     truss: { max: 1800, safe: 1200, critical: 1500 }, // Reduced for more sensitivity
-    arch: { max: 2500, safe: 1800, critical: 2200 },  // Reduced for more sensitivity
-    beam: { max: 1200, safe: 800, critical: 1000 }    // Reduced for more sensitivity
+    arch: { max: 2500, safe: 1800, critical: 2200 }   // Reduced for more sensitivity
   };
 
   const capacity = bridgeCapacities[bridgeType as keyof typeof bridgeCapacities];
@@ -49,7 +48,7 @@ const calculateDamageState = (bridgeType: string, loadPoints: LoadPoint[]) => {
     warningLevel = 'failure';
   } else if (totalWeight > capacity.critical) {
     integrity = 0.3 + (0.7 * (capacity.max - totalWeight) / (capacity.max - capacity.critical));
-    failureMode = bridgeType === 'beam' ? 'bending' : bridgeType === 'truss' ? 'buckling' : 'shear';
+    failureMode = bridgeType === 'truss' ? 'buckling' : 'shear';
     warningLevel = 'critical';
   } else if (totalWeight > capacity.safe) {
     integrity = 0.7 + (0.3 * (capacity.critical - totalWeight) / (capacity.critical - capacity.safe));
@@ -67,7 +66,7 @@ const calculateDamageState = (bridgeType: string, loadPoints: LoadPoint[]) => {
 };
 
 const Index = () => {
-  const [bridgeType, setBridgeType] = useState<'truss' | 'arch' | 'beam'>('truss');
+  const [bridgeType, setBridgeType] = useState<'truss' | 'arch'>('truss');
   const [loadPoints, setLoadPoints] = useState<LoadPoint[]>([]);
   const [showAnalytics, setShowAnalytics] = useState(true);
   

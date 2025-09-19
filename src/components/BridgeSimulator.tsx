@@ -37,7 +37,7 @@ interface Vehicle {
 }
 
 interface BridgeProps {
-  bridgeType: 'truss' | 'arch' | 'beam';
+  bridgeType: 'truss' | 'arch';
   loadPoints: LoadPoint[];
   onAddLoad: (position: [number, number, number]) => void;
   damageState: DamageState;
@@ -48,8 +48,7 @@ interface BridgeProps {
 const calculateDamage = (bridgeType: string, loadPoints: LoadPoint[]): DamageState => {
   const bridgeCapacities = {
     truss: { max: 1800, safe: 1200, critical: 1500 }, // Reduced for more sensitivity
-    arch: { max: 2500, safe: 1800, critical: 2200 },  // Reduced for more sensitivity
-    beam: { max: 1200, safe: 800, critical: 1000 }    // Reduced for more sensitivity
+    arch: { max: 2500, safe: 1800, critical: 2200 }   // Reduced for more sensitivity
   };
 
   const capacity = bridgeCapacities[bridgeType as keyof typeof bridgeCapacities];
@@ -69,7 +68,7 @@ const calculateDamage = (bridgeType: string, loadPoints: LoadPoint[]): DamageSta
     damageState.warningLevel = 'failure';
   } else if (totalWeight > capacity.critical) {
     damageState.overallIntegrity = 0.3 + (0.7 * (capacity.max - totalWeight) / (capacity.max - capacity.critical));
-    damageState.failureMode = bridgeType === 'beam' ? 'bending' : bridgeType === 'truss' ? 'buckling' : 'shear';
+    damageState.failureMode = bridgeType === 'truss' ? 'buckling' : 'shear';
     damageState.warningLevel = 'critical';
   } else if (totalWeight > capacity.safe) {
     damageState.overallIntegrity = 0.7 + (0.3 * (capacity.critical - totalWeight) / (capacity.critical - capacity.safe));
@@ -903,82 +902,6 @@ const ArchBridge: React.FC<{ loadPoints: LoadPoint[]; damageState: DamageState }
   );
 };
 
-// Enhanced Beam Bridge with realistic bending and failure
-const BeamBridge: React.FC<{ loadPoints: LoadPoint[]; damageState: DamageState }> = ({ loadPoints, damageState }) => {
-  const bridgeRef = useRef<THREE.Group>(null);
-  
-  // Realistic beam stress color
-  const getStressColor = (position: [number, number, number]) => {
-    let maxStress = 0;
-    loadPoints.forEach(load => {
-      const dist = Math.abs(position[0] - load.position[0]);
-      maxStress += load.weight / (1 + dist * 1.5);
-    });
-    const damageMultiplier = 1 + (1 - damageState.overallIntegrity) * 3.5;
-    maxStress *= damageMultiplier;
-    if (maxStress < 80) return '#22c55e';
-    if (maxStress < 160) return '#eab308';
-    if (maxStress < 240) return '#ef4444';
-    return '#dc2626';
-  };
-
-  // Realistic bending: beam sags more as load and damage increase
-  const getBendingOffset = (x: number) => {
-    let totalBend = 0;
-    loadPoints.forEach(load => {
-      const dist = Math.abs(x - load.position[0]);
-      totalBend += load.weight * Math.max(0, 4 - dist) / 400;
-    });
-    const damageAmplifier = 1 + (1 - damageState.overallIntegrity) * 3;
-    return -totalBend * damageAmplifier;
-  };
-
-  // Extreme bending/collapse
-  const collapsePosition: [number, number, number] = damageState.overallIntegrity < 0.1 ? [0, -2, 0] : [0, 0, 0];
-  const collapseRotation: [number, number, number] = damageState.overallIntegrity < 0.1 ? [0, 0, 0.7] : [0, 0, 0];
-
-  return (
-    <group ref={bridgeRef} position={collapsePosition} rotation={collapseRotation}>
-      {/* Beam nodes */}
-      {Array.from({ length: 32 }, (_, i) => {
-        const x = -4 + i * 0.25;
-        const y = 2 + getBendingOffset(x);
-        return (
-          <mesh key={i} position={[x, y, 0]}>
-            <sphereGeometry args={[0.09, 16, 16]} />
-            <meshStandardMaterial color={getStressColor([x, y, 0])} />
-          </mesh>
-        );
-      })}
-      {/* Beam body */}
-      {Array.from({ length: 31 }, (_, i) => {
-        const x1 = -4 + i * 0.25;
-        const x2 = x1 + 0.25;
-        const y1 = 2 + getBendingOffset(x1);
-        const y2 = 2 + getBendingOffset(x2);
-        return (
-          <mesh key={i} position={[(x1 + x2) / 2, (y1 + y2) / 2, 0]}>
-            <boxGeometry args={[0.25, 0.08, 0.18]} />
-            <meshStandardMaterial color={getStressColor([(x1 + x2) / 2, (y1 + y2) / 2, 0])} />
-          </mesh>
-        );
-      })}
-      {/* Collapse debris if failed */}
-      {damageState.overallIntegrity < 0.1 && (
-        <mesh position={[0, -2.5, 0]} rotation={[0, 0, 0.7]}>
-          <boxGeometry args={[8, 0.2, 1]} />
-          <meshStandardMaterial color="#ef4444" />
-        </mesh>
-      )}
-      <DamageVisualization 
-        cracks={damageState.cracks}
-        integrity={damageState.overallIntegrity}
-        failureMode={damageState.failureMode}
-      />
-    </group>
-  );
-};
-
 // Vehicle Component with improved real-time collision detection (Memoized)
 const VehicleComponent: React.FC<{ 
   initialVehicle: Vehicle; 
@@ -1000,7 +923,7 @@ const VehicleComponent: React.FC<{
       if (bridgeType === 'arch') {
         return bridgeBaseY + deckCurveHeight * (1 - Math.pow(x / (totalBridgeLength / 2), 2)) + 0.18;
       } else {
-        return bridgeBaseY + 0.18; // Flat bridge for truss/beam
+        return bridgeBaseY + 0.18; // Flat bridge for truss
       }
     }
     return bridgeBaseY + 0.01; // Road level
@@ -1222,8 +1145,6 @@ const Bridge: React.FC<BridgeProps> = React.memo(({ bridgeType, loadPoints, onAd
         return <TrussBridge loadPoints={loadPoints} damageState={damageState} />;
       case 'arch':
         return <ArchBridge loadPoints={loadPoints} damageState={damageState} />;
-      case 'beam':
-        return <BeamBridge loadPoints={loadPoints} damageState={damageState} />;
       default:
         return <TrussBridge loadPoints={loadPoints} damageState={damageState} />;
     }
@@ -1243,6 +1164,50 @@ const Bridge: React.FC<BridgeProps> = React.memo(({ bridgeType, loadPoints, onAd
 // Environment Components (Memoized to prevent unnecessary re-renders)
 const Environment: React.FC = React.memo(() => {
   const waterRef = useRef<THREE.Mesh>(null);
+  
+  // Generate fixed positions for environmental elements to prevent re-location on re-renders
+  const treePositionsLeft = useMemo(() => 
+    Array.from({ length: 20 }, (_, i) => ({
+      x: -35 + Math.random() * 15,
+      z: -20 + Math.random() * 40,
+      height: 2.5 + Math.random() * 2,
+      foliageSize: 1 + Math.random() * 0.5
+    })), []
+  );
+  
+  const treePositionsRight = useMemo(() => 
+    Array.from({ length: 25 }, (_, i) => ({
+      x: 20 + Math.random() * 20,
+      z: -25 + Math.random() * 50,
+      height: 2.5 + Math.random() * 2,
+      foliageSize: 1 + Math.random() * 0.5
+    })), []
+  );
+  
+  const rockPositions = useMemo(() => 
+    Array.from({ length: 12 }, (_, i) => {
+      const x = -15 + Math.random() * 30;
+      const z = -10 + Math.random() * 20;
+      const size = 0.3 + Math.random() * 0.5;
+      return { x, z, size };
+    }), []
+  );
+  
+  const buildingPositionsLeft = useMemo(() => 
+    Array.from({ length: 3 }, (_, i) => ({
+      x: -40 + i * 5,
+      z: -15 + Math.random() * 10,
+      height: 3 + Math.random() * 2
+    })), []
+  );
+  
+  const buildingPositionsRight = useMemo(() => 
+    Array.from({ length: 4 }, (_, i) => ({
+      x: 35 + i * 4,
+      z: -10 + Math.random() * 15,
+      height: 3 + Math.random() * 2
+    })), []
+  );
   
   useFrame((state) => {
     if (waterRef.current && waterRef.current.material) {
@@ -1399,46 +1364,36 @@ const Environment: React.FC = React.memo(() => {
       </mesh>
       
       {/* Trees on left side land mass - distributed across the terrain */}
-      {Array.from({ length: 20 }, (_, i) => {
-        const x = -35 + Math.random() * 15; // Spread across left land mass
-        const z = -20 + Math.random() * 40;
-        const height = 2.5 + Math.random() * 2;
-        return (
-          <group key={`tree-left-${i}`} position={[x, 1.5, z]}>
-            {/* Tree trunk */}
-            <mesh position={[0, height / 2, 0]} castShadow>
-              <cylinderGeometry args={[0.15, 0.25, height]} />
-              <meshStandardMaterial color="#654321" />
-            </mesh>
-            {/* Tree foliage */}
-            <mesh position={[0, height + 1, 0]} castShadow>
-              <sphereGeometry args={[1 + Math.random() * 0.5]} />
-              <meshStandardMaterial color="#228B22" />
-            </mesh>
-          </group>
-        );
-      })}
+      {treePositionsLeft.map((tree, i) => (
+        <group key={`tree-left-${i}`} position={[tree.x, 1.5, tree.z]}>
+          {/* Tree trunk */}
+          <mesh position={[0, tree.height / 2, 0]} castShadow>
+            <cylinderGeometry args={[0.15, 0.25, tree.height]} />
+            <meshStandardMaterial color="#654321" />
+          </mesh>
+          {/* Tree foliage */}
+          <mesh position={[0, tree.height + 1, 0]} castShadow>
+            <sphereGeometry args={[tree.foliageSize]} />
+            <meshStandardMaterial color="#228B22" />
+          </mesh>
+        </group>
+      ))}
       
       {/* Trees on right side land mass - distributed across the terrain */}
-      {Array.from({ length: 25 }, (_, i) => {
-        const x = 20 + Math.random() * 20; // Spread across right land mass
-        const z = -25 + Math.random() * 50;
-        const height = 2.5 + Math.random() * 2;
-        return (
-          <group key={`tree-right-${i}`} position={[x, 1.5, z]}>
-            {/* Tree trunk */}
-            <mesh position={[0, height / 2, 0]} castShadow>
-              <cylinderGeometry args={[0.15, 0.25, height]} />
-              <meshStandardMaterial color="#654321" />
-            </mesh>
-            {/* Tree foliage */}
-            <mesh position={[0, height + 1, 0]} castShadow>
-              <sphereGeometry args={[1 + Math.random() * 0.5]} />
-              <meshStandardMaterial color="#228B22" />
-            </mesh>
-          </group>
-        );
-      })}
+      {treePositionsRight.map((tree, i) => (
+        <group key={`tree-right-${i}`} position={[tree.x, 1.5, tree.z]}>
+          {/* Tree trunk */}
+          <mesh position={[0, tree.height / 2, 0]} castShadow>
+            <cylinderGeometry args={[0.15, 0.25, tree.height]} />
+            <meshStandardMaterial color="#654321" />
+          </mesh>
+          {/* Tree foliage */}
+          <mesh position={[0, tree.height + 1, 0]} castShadow>
+            <sphereGeometry args={[tree.foliageSize]} />
+            <meshStandardMaterial color="#228B22" />
+          </mesh>
+        </group>
+      ))}
       
       {/* Bridge abutments/foundations - positioned UNDER the bridge, not blocking the road */}
       {/* Left abutment - under bridge only */}
@@ -1490,15 +1445,12 @@ const Environment: React.FC = React.memo(() => {
       </mesh>
       
       {/* Some rocks/boulders scattered around for realism */}
-      {Array.from({ length: 12 }, (_, i) => {
-        const x = -15 + Math.random() * 30;
-        const z = -10 + Math.random() * 20;
-        const size = 0.3 + Math.random() * 0.5;
+      {rockPositions.map((rock, i) => {
         // Don't place rocks on the road
-        if (Math.abs(z) > deckWidth/2 + 1) {
+        if (Math.abs(rock.z) > deckWidth/2 + 1) {
           return (
-            <mesh key={`rock-${i}`} position={[x, size / 2, z]} castShadow receiveShadow>
-              <sphereGeometry args={[size]} />
+            <mesh key={`rock-${i}`} position={[rock.x, rock.size / 2, rock.z]} castShadow receiveShadow>
+              <sphereGeometry args={[rock.size]} />
               <meshStandardMaterial color="#696969" />
             </mesh>
           );
@@ -1507,38 +1459,28 @@ const Environment: React.FC = React.memo(() => {
       })}
       
       {/* Small buildings/structures on distant land for context */}
-      {Array.from({ length: 3 }, (_, i) => {
-        const x = -40 + i * 5;
-        const z = -15 + Math.random() * 10;
-        const height = 3 + Math.random() * 2;
-        return (
-          <mesh key={`building-left-${i}`} position={[x, 1.5 + height/2, z]} castShadow>
-            <boxGeometry args={[2, height, 2]} />
-            <meshStandardMaterial color="#8B4513" />
-          </mesh>
-        );
-      })}
+      {buildingPositionsLeft.map((building, i) => (
+        <mesh key={`building-left-${i}`} position={[building.x, 1.5 + building.height/2, building.z]} castShadow>
+          <boxGeometry args={[2, building.height, 2]} />
+          <meshStandardMaterial color="#8B4513" />
+        </mesh>
+      ))}
       
-      {Array.from({ length: 4 }, (_, i) => {
-        const x = 35 + i * 4;
-        const z = -10 + Math.random() * 15;
-        const height = 3 + Math.random() * 2;
-        return (
-          <mesh key={`building-right-${i}`} position={[x, 1.5 + height/2, z]} castShadow>
-            <boxGeometry args={[2, height, 2]} />
-            <meshStandardMaterial color="#8B4513" />
-          </mesh>
-        );
-      })}
+      {buildingPositionsRight.map((building, i) => (
+        <mesh key={`building-right-${i}`} position={[building.x, 1.5 + building.height/2, building.z]} castShadow>
+          <boxGeometry args={[2, building.height, 2]} />
+          <meshStandardMaterial color="#8B4513" />
+        </mesh>
+      ))}
     </>
   );
 });
 
 // Main Simulator Component
 interface BridgeSimulatorProps {
-  bridgeType?: 'truss' | 'arch' | 'beam';
+  bridgeType?: 'truss' | 'arch';
   loadPoints?: LoadPoint[];
-  onBridgeTypeChange?: (type: 'truss' | 'arch' | 'beam') => void;
+  onBridgeTypeChange?: (type: 'truss' | 'arch') => void;
   onLoadPointsChange?: (loads: LoadPoint[]) => void;
   onVehicleDataChange?: (vehicles: Vehicle[], dynamicLoad: number, damageState: DamageState) => void;
 }
@@ -1550,7 +1492,7 @@ const BridgeSimulator: React.FC<BridgeSimulatorProps> = ({
   onLoadPointsChange,
   onVehicleDataChange
 }) => {
-  const [internalBridgeType, setInternalBridgeType] = useState<'truss' | 'arch' | 'beam'>('truss');
+  const [internalBridgeType, setInternalBridgeType] = useState<'truss' | 'arch'>('truss');
   const [internalLoadPoints, setInternalLoadPoints] = useState<LoadPoint[]>([]);
   const [currentWeight, setCurrentWeight] = useState(100);
   const vehiclesRef = useRef<Vehicle[]>([]);
@@ -1834,7 +1776,7 @@ const BridgeSimulator: React.FC<BridgeSimulatorProps> = ({
     }
   }, [onLoadPointsChange]);
 
-  const handleBridgeTypeChange = useCallback((type: 'truss' | 'arch' | 'beam') => {
+  const handleBridgeTypeChange = useCallback((type: 'truss' | 'arch') => {
     if (onBridgeTypeChange) {
       onBridgeTypeChange(type);
     } else {
@@ -1902,7 +1844,7 @@ const BridgeSimulator: React.FC<BridgeSimulatorProps> = ({
         <div className="bg-card/90 backdrop-blur-sm p-4 rounded-lg shadow-panel border border-border">
           <h3 className="font-semibold mb-3">Bridge Type</h3>
           <div className="flex gap-2">
-            {['truss', 'arch', 'beam'].map((type) => (
+            {['truss', 'arch'].map((type) => (
               <button
                 key={type}
                 onClick={() => handleBridgeTypeChange(type as any)}

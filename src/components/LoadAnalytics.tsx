@@ -27,7 +27,7 @@ interface DamageState {
 }
 
 interface LoadAnalyticsProps {
-  bridgeType: 'truss' | 'arch' | 'beam';
+  bridgeType: 'truss' | 'arch';
   loadPoints: LoadPoint[];
   damageState?: DamageState;
   vehiclesOnBridge?: Vehicle[];
@@ -44,8 +44,7 @@ const LoadAnalytics: React.FC<LoadAnalyticsProps> = ({
   // Bridge capacity limits (simplified) - Updated to match simulator
   const bridgeCapacities = {
     truss: { max: 1800, safe: 1200 }, // Reduced for more sensitivity
-    arch: { max: 2500, safe: 1800 },  // Reduced for more sensitivity
-    beam: { max: 1200, safe: 800 }    // Reduced for more sensitivity
+    arch: { max: 2500, safe: 1800 }   // Reduced for more sensitivity
   };
 
   const staticWeight = loadPoints.reduce((sum, load) => sum + load.weight, 0);
@@ -83,25 +82,6 @@ const LoadAnalytics: React.FC<LoadAnalyticsProps> = ({
     });
     
     if (allLoads.length === 0) return null;
-    
-    // For beam bridges, find the location with highest moment
-    if (bridgeType === 'beam') {
-      let maxMoment = 0;
-      let maxLocation = 0;
-      
-      for (let x = -4; x <= 4; x += 0.1) {
-        let moment = 0;
-        allLoads.forEach(load => {
-          const distance = Math.abs(x - load.position[0]);
-          moment += load.weight * Math.max(0, 4 - distance);
-        });
-        if (moment > maxMoment) {
-          maxMoment = moment;
-          maxLocation = x;
-        }
-      }
-      return { x: maxLocation.toFixed(1), stress: maxMoment };
-    }
     
     // For truss and arch, find the most loaded point
     const centerLoads = allLoads.filter(load => Math.abs(load.position[0]) < 1);
@@ -378,12 +358,6 @@ const LoadAnalytics: React.FC<LoadAnalyticsProps> = ({
           {bridgeType === 'arch' && (
             <div className="pt-2 border-t border-border text-xs text-muted-foreground">
               <p>Arch bridges transfer loads through compression, making them ideal for heavy loads.</p>
-            </div>
-          )}
-          
-          {bridgeType === 'beam' && (
-            <div className="pt-2 border-t border-border text-xs text-muted-foreground">
-              <p>Beam bridges rely on flexural strength, showing visible deflection under load.</p>
             </div>
           )}
         </CardContent>
