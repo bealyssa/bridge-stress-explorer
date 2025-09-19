@@ -25,11 +25,23 @@ interface DamageState {
   warningLevel: 'safe' | 'caution' | 'danger' | 'critical' | 'failure';
 }
 
+interface Vehicle {
+  id: string;
+  position: [number, number, number];
+  velocity: [number, number, number];
+  type: 'car' | 'truck' | 'bus';
+  weight: number;
+  color: string;
+  direction: 1 | -1; // 1 for left to right, -1 for right to left
+  isOnBridge: boolean;
+}
+
 interface BridgeProps {
   bridgeType: 'truss' | 'arch' | 'beam';
   loadPoints: LoadPoint[];
   onAddLoad: (position: [number, number, number]) => void;
   damageState: DamageState;
+  vehicles: Vehicle[];
 }
 
 // Damage calculation utilities
@@ -600,195 +612,181 @@ const BeamBridge: React.FC<{ loadPoints: LoadPoint[]; damageState: DamageState }
   );
 };
 
-// Vehicle Component
-const Vehicle: React.FC<{ 
-  position: [number, number, number], 
-  color: string, 
-  type: 'car' | 'truck' | 'bus',
-  rotation?: [number, number, number]
-}> = ({ position, color, type, rotation = [0, 0, 0] }) => {
+// Vehicle Component with improved real-time collision detection
+const VehicleComponent: React.FC<{ 
+  initialVehicle: Vehicle; 
+  bridgeType: string; 
+  damageState: DamageState;
+  allVehicles: React.MutableRefObject<Vehicle[]>;
+}> = ({ initialVehicle, bridgeType, damageState, allVehicles }) => {
   const meshRef = useRef<THREE.Group>(null);
-
-  const vehicleSpecs = {
-    car: { length: 1.8, width: 0.8, height: 0.6 },
-    truck: { length: 3.2, width: 1.0, height: 1.2 },
-    bus: { length: 4.0, width: 1.2, height: 1.4 }
+  const vehicleData = useRef(initialVehicle);
+  
+  // Get bridge height at given x position
+  const getBridgeHeight = (x: number): number => {
+    const bridgeBaseY = 2.2;
+    const totalBridgeLength = 28;
+    const deckCurveHeight = 1.5;
+    
+    // Only apply curve in the bridge section (-14 to 14)
+    if (x >= -14 && x <= 14) {
+      if (bridgeType === 'arch') {
+        return bridgeBaseY + deckCurveHeight * (1 - Math.pow(x / (totalBridgeLength / 2), 2)) + 0.18;
+      } else {
+        return bridgeBaseY + 0.18; // Flat bridge for truss/beam
+      }
+    }
+    return bridgeBaseY + 0.01; // Road level
   };
 
-  const specs = vehicleSpecs[type];
+  // Check for vehicles ahead in the same lane (using real-time positions)
+  const getVehicleAhead = (currentVehicle: Vehicle): Vehicle | null => {
+    const vehicles = allVehicles.current;
+    const sameDirection = vehicles.filter(v => 
+      v.id !== currentVehicle.id && 
+      v.direction === currentVehicle.direction &&
+      Math.abs(v.position[2] - currentVehicle.position[2]) < 0.5 // Same lane
+    );
 
-  return (
-    <group ref={meshRef} position={position} rotation={rotation}>
-      {/* Vehicle body */}
-      <mesh position={[0, specs.height / 2, 0]} castShadow>
-        <boxGeometry args={[specs.length, specs.height, specs.width]} />
-        <meshStandardMaterial color={color} />
-      </mesh>
+    let closestVehicle: Vehicle | null = null;
+    let minDistance = Infinity;
+
+    for (const vehicle of sameDirection) {
+      let distance: number;
+      if (currentVehicle.direction === 1) {
+        // Going right, check vehicles ahead (higher x)
+        distance = vehicle.position[0] - currentVehicle.position[0];
+      } else {
+        // Going left, check vehicles ahead (lower x)
+        distance = currentVehicle.position[0] - vehicle.position[0];
+      }
+
+      if (distance > 0 && distance < minDistance && distance < 8) { // Only check nearby vehicles
+        minDistance = distance;
+        closestVehicle = vehicle;
+      }
+    }
+
+    return closestVehicle;
+  };
+
+  useFrame((state, delta) => {
+    if (meshRef.current) {
+      const vehicle = vehicleData.current;
       
-      {/* Windshield */}
-      <mesh position={[specs.length * 0.3, specs.height * 0.8, 0]} castShadow>
-        <boxGeometry args={[specs.length * 0.3, specs.height * 0.4, specs.width * 0.9]} />
-        <meshStandardMaterial color="#87CEEB" transparent opacity={0.7} />
-      </mesh>
-      
-      {/* Wheels */}
-      <mesh position={[specs.length * 0.35, 0.15, specs.width * 0.45]} castShadow>
-        <cylinderGeometry args={[0.15, 0.15, 0.1]} />
-        <meshStandardMaterial color="#333333" />
-      </mesh>
-      <mesh position={[specs.length * 0.35, 0.15, -specs.width * 0.45]} castShadow>
-        <cylinderGeometry args={[0.15, 0.15, 0.1]} />
-        <meshStandardMaterial color="#333333" />
-      </mesh>
-      <mesh position={[-specs.length * 0.35, 0.15, specs.width * 0.45]} castShadow>
-        <cylinderGeometry args={[0.15, 0.15, 0.1]} />
-        <meshStandardMaterial color="#333333" />
-      </mesh>
-      <mesh position={[-specs.length * 0.35, 0.15, -specs.width * 0.45]} castShadow>
-        <cylinderGeometry args={[0.15, 0.15, 0.1]} />
-        <meshStandardMaterial color="#333333" />
-      </mesh>
-      
-      {/* Headlights */}
-      <mesh position={[specs.length * 0.5, specs.height * 0.5, specs.width * 0.35]} castShadow>
-        <sphereGeometry args={[0.08]} />
-        <meshStandardMaterial color="#FFFF99" emissive="#FFFF99" emissiveIntensity={0.3} />
-      </mesh>
-      <mesh position={[specs.length * 0.5, specs.height * 0.5, -specs.width * 0.35]} castShadow>
-        <sphereGeometry args={[0.08]} />
-        <meshStandardMaterial color="#FFFF99" emissive="#FFFF99" emissiveIntensity={0.3} />
-      </mesh>
-    </group>
-  );
-};
+      // Adjusted speeds - small cars faster than big vehicles
+      let baseSpeed: number;
+      switch (vehicle.type) {
+        case 'car': baseSpeed = 3.0; break;   // Cars fastest (small vehicles)
+        case 'bus': baseSpeed = 2.0; break;   // Buses slower (big vehicles)
+        case 'truck': baseSpeed = 1.8; break; // Trucks slowest (biggest vehicles)
+        default: baseSpeed = 2.5; break;
+      }
 
-// Animated Traffic System
-const TrafficSystem: React.FC = () => {
-  const vehiclesRef = useRef<THREE.Group[]>([]);
-  
-  // Vehicle data with different types, colors, speeds, and spawn times
-  const vehicleData = [
-    { id: 1, type: 'car' as const, color: '#FF4444', speed: 0.08, delay: 0, lane: 0.3 },
-    { id: 2, type: 'truck' as const, color: '#4444FF', speed: 0.06, delay: 2, lane: -0.3 },
-    { id: 3, type: 'car' as const, color: '#44FF44', speed: 0.09, delay: 4, lane: 0.3 },
-    { id: 4, type: 'bus' as const, color: '#FFFF44', speed: 0.05, delay: 6, lane: -0.3 },
-    { id: 5, type: 'car' as const, color: '#FF44FF', speed: 0.07, delay: 8, lane: 0.3 },
-    { id: 6, type: 'car' as const, color: '#44FFFF', speed: 0.08, delay: 10, lane: -0.3 },
-    { id: 7, type: 'truck' as const, color: '#888888', speed: 0.06, delay: 12, lane: 0.3 },
-    { id: 8, type: 'car' as const, color: '#FFA500', speed: 0.09, delay: 14, lane: -0.3 },
-  ];
+      // Check for vehicle ahead
+      const vehicleAhead = getVehicleAhead(vehicle);
+      let currentSpeed = baseSpeed;
 
-  // Vehicles going in opposite direction
-  const vehicleDataReverse = [
-    { id: 9, type: 'car' as const, color: '#800080', speed: 0.08, delay: 1, lane: -0.3 },
-    { id: 10, type: 'truck' as const, color: '#008000', speed: 0.06, delay: 3, lane: 0.3 },
-    { id: 11, type: 'car' as const, color: '#FFC0CB', speed: 0.09, delay: 5, lane: -0.3 },
-    { id: 12, type: 'bus' as const, color: '#A52A2A', speed: 0.05, delay: 7, lane: 0.3 },
-    { id: 13, type: 'car' as const, color: '#00FF7F', speed: 0.07, delay: 9, lane: -0.3 },
-    { id: 14, type: 'car' as const, color: '#DC143C', speed: 0.08, delay: 11, lane: 0.3 },
-    { id: 15, type: 'truck' as const, color: '#191970', speed: 0.06, delay: 13, lane: -0.3 },
-    { id: 16, type: 'car' as const, color: '#FFD700', speed: 0.09, delay: 15, lane: 0.3 },
-  ];
-
-  useFrame((state) => {
-    const time = state.clock.elapsedTime;
-    
-    // Animate left-to-right vehicles
-    vehicleData.forEach((vehicle, index) => {
-      if (vehiclesRef.current[index]) {
-        const startTime = vehicle.delay;
-        const cycleTime = 35; // Time for complete cycle
-        const adjustedTime = (time - startTime) % cycleTime;
+      if (vehicleAhead) {
+        const safeDistance = vehicle.type === 'truck' ? 4.0 : vehicle.type === 'bus' ? 3.5 : 3.0; // Increased safe distances
+        let distance: number;
         
-        if (adjustedTime >= 0) {
-          // Calculate position along the path
-          const progress = adjustedTime * vehicle.speed;
-          let x = -30 + progress * 65; // Start at -30, end at 35
+        if (vehicle.direction === 1) {
+          distance = vehicleAhead.position[0] - vehicle.position[0];
+        } else {
+          distance = vehicle.position[0] - vehicleAhead.position[0];
+        }
+
+        if (distance < safeDistance * 1.5) { // Give more buffer space
+          // Adjust speed based on distance - more gradual following
+          const speedRatio = Math.max(0.4, Math.min(1.0, distance / safeDistance)); // Minimum 40% speed
+          currentSpeed = baseSpeed * speedRatio;
           
-          // Reset when vehicle goes off screen
-          if (x > 35) {
-            x = -30 + ((x - 35) % 65);
+          // Maintain better minimum speed to prevent bunching
+          if (distance > 1.5) { // Increased minimum distance before slowing
+            currentSpeed = Math.max(currentSpeed, baseSpeed * 0.6); // Higher minimum speed
           }
-          
-          // Calculate Y position based on road curve
-          let y = 2.2; // Bridge height
-          if (x < -14) {
-            // On left approach road
-            y = 2.2;
-          } else if (x > 14) {
-            // On right approach road  
-            y = 2.2;
-          } else {
-            // On bridge - follow arch curve
-            const bridgeProgress = (x + 14) / 28;
-            y = 2.2 + 1.5 * Math.pow(1 - Math.pow((x / 14), 2), 0.8);
-          }
-          
-          vehiclesRef.current[index].position.set(x, y + 0.4, vehicle.lane);
-          vehiclesRef.current[index].rotation.set(0, 0, 0);
         }
       }
-    });
-    
-    // Animate right-to-left vehicles
-    vehicleDataReverse.forEach((vehicle, index) => {
-      const reverseIndex = index + vehicleData.length;
-      if (vehiclesRef.current[reverseIndex]) {
-        const startTime = vehicle.delay;
-        const cycleTime = 35;
-        const adjustedTime = (time - startTime) % cycleTime;
-        
-        if (adjustedTime >= 0) {
-          const progress = adjustedTime * vehicle.speed;
-          let x = 35 - progress * 65; // Start at 35, end at -30
-          
-          // Reset when vehicle goes off screen
-          if (x < -30) {
-            x = 35 - ((30 + x) % 65);
-          }
-          
-          // Calculate Y position
-          let y = 2.2;
-          if (x < -14) {
-            y = 2.2;
-          } else if (x > 14) {
-            y = 2.2;
-          } else {
-            const bridgeProgress = (x + 14) / 28;
-            y = 2.2 + 1.5 * Math.pow(1 - Math.pow((x / 14), 2), 0.8);
-          }
-          
-          vehiclesRef.current[reverseIndex].position.set(x, y + 0.4, vehicle.lane);
-          vehiclesRef.current[reverseIndex].rotation.set(0, Math.PI, 0);
-        }
+      
+      // Calculate new position
+      const newX = vehicle.position[0] + vehicle.direction * currentSpeed * delta;
+      const targetY = getBridgeHeight(newX);
+      
+      // Keep vehicles in their designated lanes
+      const laneCenter = vehicle.direction === 1 ? 0.6 : -0.6;
+      const newZ = THREE.MathUtils.lerp(vehicle.position[2], laneCenter, 2 * delta);
+      
+      // Smooth Y transition to follow bridge curve
+      const newY = THREE.MathUtils.lerp(vehicle.position[1], targetY, 5 * delta);
+      
+      // Update internal vehicle data
+      vehicle.position = [newX, newY, newZ];
+      vehicle.isOnBridge = newX >= -16 && newX <= 16;
+      
+      // Update the shared vehicles array with current position
+      const vehicleIndex = allVehicles.current.findIndex(v => v.id === vehicle.id);
+      if (vehicleIndex !== -1) {
+        allVehicles.current[vehicleIndex] = { ...vehicle };
       }
-    });
+      
+      // Reset vehicle if it goes too far
+      if (newX > 35 || newX < -35) {
+        const resetX = vehicle.direction === 1 ? -35 : 35;
+        const resetY = getBridgeHeight(resetX);
+        vehicle.position = [resetX, resetY, laneCenter];
+        vehicle.isOnBridge = false;
+      }
+      
+      // Update mesh position directly (smooth animation)
+      meshRef.current.position.set(vehicle.position[0], vehicle.position[1], vehicle.position[2]);
+      
+      // Face direction of travel
+      meshRef.current.rotation.y = vehicle.direction === 1 ? 0 : Math.PI;
+    }
   });
 
+  const getVehicleSize = () => {
+    switch (initialVehicle.type) {
+      case 'truck': return { width: 0.4, height: 0.6, length: 1.2 };
+      case 'bus': return { width: 0.35, height: 0.7, length: 2.0 };
+      default: return { width: 0.3, height: 0.4, length: 0.8 };
+    }
+  };
+
+  const size = getVehicleSize();
+
   return (
-    <group>
-      {/* Left-to-right vehicles */}
-      {vehicleData.map((vehicle, index) => (
-        <group key={vehicle.id} ref={(ref) => ref && (vehiclesRef.current[index] = ref)}>
-          <Vehicle
-            position={[-30, 2.6, vehicle.lane]}
-            color={vehicle.color}
-            type={vehicle.type}
-          />
-        </group>
-      ))}
+    <group ref={meshRef} position={initialVehicle.position}>
+      {/* Vehicle body */}
+      <mesh position={[0, size.height / 2, 0]}>
+        <boxGeometry args={[size.length, size.height, size.width]} />
+        <meshStandardMaterial color={initialVehicle.color} />
+      </mesh>
       
-      {/* Right-to-left vehicles */}
-      {vehicleDataReverse.map((vehicle, index) => (
-        <group key={vehicle.id} ref={(ref) => ref && (vehiclesRef.current[index + vehicleData.length] = ref)}>
-          <Vehicle
-            position={[35, 2.6, vehicle.lane]}
-            color={vehicle.color}
-            type={vehicle.type}
-            rotation={[0, Math.PI, 0]}
-          />
-        </group>
-      ))}
+      {/* Vehicle wheels */}
+      <mesh position={[size.length * 0.3, 0.05, size.width * 0.4]} rotation={[Math.PI / 2, 0, 0]}>
+        <cylinderGeometry args={[0.08, 0.08, 0.05]} />
+        <meshStandardMaterial color="#222" />
+      </mesh>
+      <mesh position={[size.length * 0.3, 0.05, -size.width * 0.4]} rotation={[Math.PI / 2, 0, 0]}>
+        <cylinderGeometry args={[0.08, 0.08, 0.05]} />
+        <meshStandardMaterial color="#222" />
+      </mesh>
+      <mesh position={[-size.length * 0.3, 0.05, size.width * 0.4]} rotation={[Math.PI / 2, 0, 0]}>
+        <cylinderGeometry args={[0.08, 0.08, 0.05]} />
+        <meshStandardMaterial color="#222" />
+      </mesh>
+      <mesh position={[-size.length * 0.3, 0.05, -size.width * 0.4]} rotation={[Math.PI / 2, 0, 0]}>
+        <cylinderGeometry args={[0.08, 0.08, 0.05]} />
+        <meshStandardMaterial color="#222" />
+      </mesh>
+      
+      {/* Vehicle windows */}
+      <mesh position={[0, size.height * 0.8, 0]}>
+        <boxGeometry args={[size.length * 0.8, size.height * 0.3, size.width * 0.9]} />
+        <meshStandardMaterial color="#87CEEB" transparent opacity={0.3} />
+      </mesh>
     </group>
   );
 };
@@ -849,8 +847,8 @@ const ClickHandler: React.FC<{ onAddLoad: (position: [number, number, number]) =
   );
 };
 
-// Main Bridge Component with damage integration
-const Bridge: React.FC<BridgeProps> = ({ bridgeType, loadPoints, onAddLoad, damageState }) => {
+// Main Bridge Component with damage integration and vehicles
+const Bridge: React.FC<BridgeProps> = ({ bridgeType, loadPoints, onAddLoad, damageState, vehicles }) => {
   const renderBridge = () => {
     switch (bridgeType) {
       case 'truss':
@@ -1186,15 +1184,173 @@ const BridgeSimulator: React.FC<BridgeSimulatorProps> = ({
   const [internalBridgeType, setInternalBridgeType] = useState<'truss' | 'arch' | 'beam'>('truss');
   const [internalLoadPoints, setInternalLoadPoints] = useState<LoadPoint[]>([]);
   const [currentWeight, setCurrentWeight] = useState(100);
+  const vehiclesRef = useRef<Vehicle[]>([]);
 
   const bridgeType = externalBridgeType || internalBridgeType;
   const loadPoints = externalLoadPoints || internalLoadPoints;
   
-  // Calculate damage state in real-time
-  const damageState = useMemo(() => 
-    calculateDamage(bridgeType, loadPoints), 
-    [bridgeType, loadPoints]
-  );
+  // Initialize vehicles
+  React.useEffect(() => {
+    const initialVehicles: Vehicle[] = [
+      // Left to right traffic (right lane) - better spacing
+      {
+        id: 'car1',
+        position: [-25, 2.21, 0.6],
+        velocity: [0, 0, 0],
+        type: 'car',
+        weight: 150,
+        color: '#ff4444',
+        direction: 1,
+        isOnBridge: false
+      },
+      {
+        id: 'truck1',
+        position: [-35, 2.21, 0.6], // More spacing
+        velocity: [0, 0, 0],
+        type: 'truck',
+        weight: 800,
+        color: '#4444ff',
+        direction: 1,
+        isOnBridge: false
+      },
+      {
+        id: 'car3',
+        position: [-15, 2.21, 0.6], // Better spacing
+        velocity: [0, 0, 0],
+        type: 'car',
+        weight: 160,
+        color: '#ff44ff',
+        direction: 1,
+        isOnBridge: false
+      },
+      {
+        id: 'car4',
+        position: [-5, 2.21, 0.6], // More spacing
+        velocity: [0, 0, 0],
+        type: 'car',
+        weight: 145,
+        color: '#44ffff',
+        direction: 1,
+        isOnBridge: false
+      },
+      {
+        id: 'bus2',
+        position: [-45, 2.21, 0.6], // More spacing
+        velocity: [0, 0, 0],
+        type: 'bus',
+        weight: 650,
+        color: '#ff8844',
+        direction: 1,
+        isOnBridge: false
+      },
+      {
+        id: 'car5',
+        position: [5, 2.21, 0.6], // Across bridge
+        velocity: [0, 0, 0],
+        type: 'car',
+        weight: 155,
+        color: '#8844ff',
+        direction: 1,
+        isOnBridge: false
+      },
+      {
+        id: 'truck2',
+        position: [-55, 2.21, 0.6], // Much more spacing
+        velocity: [0, 0, 0],
+        type: 'truck',
+        weight: 850,
+        color: '#448844',
+        direction: 1,
+        isOnBridge: false
+      },
+      // Right to left traffic (left lane) - better spacing
+      {
+        id: 'car2',
+        position: [25, 2.21, -0.6],
+        velocity: [0, 0, 0],
+        type: 'car',
+        weight: 140,
+        color: '#44ff44',
+        direction: -1,
+        isOnBridge: false
+      },
+      {
+        id: 'bus1',
+        position: [35, 2.21, -0.6], // More spacing
+        velocity: [0, 0, 0],
+        type: 'bus',
+        weight: 600,
+        color: '#ffff44',
+        direction: -1,
+        isOnBridge: false
+      },
+      {
+        id: 'car6',
+        position: [15, 2.21, -0.6], // Better spacing
+        velocity: [0, 0, 0],
+        type: 'car',
+        weight: 135,
+        color: '#ff4488',
+        direction: -1,
+        isOnBridge: false
+      },
+      {
+        id: 'car7',
+        position: [5, 2.21, -0.6], // More spacing
+        velocity: [0, 0, 0],
+        type: 'car',
+        weight: 165,
+        color: '#88ff44',
+        direction: -1,
+        isOnBridge: false
+      },
+      {
+        id: 'truck3',
+        position: [45, 2.21, -0.6], // More spacing
+        velocity: [0, 0, 0],
+        type: 'truck',
+        weight: 780,
+        color: '#4488ff',
+        direction: -1,
+        isOnBridge: false
+      },
+      {
+        id: 'car8',
+        position: [-5, 2.21, -0.6], // Across bridge
+        velocity: [0, 0, 0],
+        type: 'car',
+        weight: 150,
+        color: '#ffaa44',
+        direction: -1,
+        isOnBridge: false
+      },
+      {
+        id: 'bus3',
+        position: [55, 2.21, -0.6], // Much more spacing
+        velocity: [0, 0, 0],
+        type: 'bus',
+        weight: 620,
+        color: '#aa44ff',
+        direction: -1,
+        isOnBridge: false
+      }
+    ];
+    vehiclesRef.current = initialVehicles;
+  }, []);
+
+  // Update vehicle position (removed to prevent re-renders)
+  // const updateVehiclePosition = useCallback((id: string, newPosition: [number, number, number], isOnBridge: boolean) => {
+  //   setVehicles(prev => prev.map(vehicle => 
+  //     vehicle.id === id 
+  //       ? { ...vehicle, position: newPosition, isOnBridge }
+  //       : vehicle
+  //   ));
+  // }, []);
+  
+  // Calculate damage state (vehicles don't affect this for performance)
+  const damageState = useMemo(() => {
+    return calculateDamage(bridgeType, loadPoints);
+  }, [bridgeType, loadPoints]);
 
   const addLoad = useCallback((position: [number, number, number]) => {
     const newLoad: LoadPoint = {
@@ -1252,14 +1408,23 @@ const BridgeSimulator: React.FC<BridgeSimulatorProps> = ({
         {/* Environment (sky, water, land, trees) */}
         <Environment />
         
-        {/* Animated Traffic System */}
-        <TrafficSystem />
+        {/* Vehicles */}
+        {vehiclesRef.current.map((vehicle) => (
+          <VehicleComponent 
+            key={vehicle.id} 
+            initialVehicle={vehicle} 
+            bridgeType={bridgeType}
+            damageState={damageState}
+            allVehicles={vehiclesRef}
+          />
+        ))}
         
         <Bridge 
           bridgeType={bridgeType} 
           loadPoints={loadPoints} 
           onAddLoad={addLoad}
           damageState={damageState}
+          vehicles={vehiclesRef.current}
         />
         
         <OrbitControls
