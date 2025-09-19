@@ -28,12 +28,12 @@ interface DamageState {
   warningLevel: string;
 }
 
-// Simple damage calculation for analytics
+// Simple damage calculation for analytics - Updated to match simulator
 const calculateDamageState = (bridgeType: string, loadPoints: LoadPoint[]) => {
   const bridgeCapacities = {
-    truss: { max: 2000, safe: 1600, critical: 1800 },
-    arch: { max: 3000, safe: 2400, critical: 2700 },
-    beam: { max: 1500, safe: 1200, critical: 1350 }
+    truss: { max: 1800, safe: 1200, critical: 1500 }, // Reduced for more sensitivity
+    arch: { max: 2500, safe: 1800, critical: 2200 },  // Reduced for more sensitivity
+    beam: { max: 1200, safe: 800, critical: 1000 }    // Reduced for more sensitivity
   };
 
   const capacity = bridgeCapacities[bridgeType as keyof typeof bridgeCapacities];

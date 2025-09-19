@@ -41,11 +41,11 @@ const LoadAnalytics: React.FC<LoadAnalyticsProps> = ({
   vehiclesOnBridge = [], 
   dynamicLoad = 0 
 }) => {
-  // Bridge capacity limits (simplified)
+  // Bridge capacity limits (simplified) - Updated to match simulator
   const bridgeCapacities = {
-    truss: { max: 2000, safe: 1600 },
-    arch: { max: 3000, safe: 2400 },
-    beam: { max: 1500, safe: 1200 }
+    truss: { max: 1800, safe: 1200 }, // Reduced for more sensitivity
+    arch: { max: 2500, safe: 1800 },  // Reduced for more sensitivity
+    beam: { max: 1200, safe: 800 }    // Reduced for more sensitivity
   };
 
   const staticWeight = loadPoints.reduce((sum, load) => sum + load.weight, 0);

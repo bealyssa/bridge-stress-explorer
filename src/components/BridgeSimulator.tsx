@@ -47,9 +47,9 @@ interface BridgeProps {
 // Damage calculation utilities
 const calculateDamage = (bridgeType: string, loadPoints: LoadPoint[]): DamageState => {
   const bridgeCapacities = {
-    truss: { max: 2000, safe: 1600, critical: 1800 },
-    arch: { max: 3000, safe: 2400, critical: 2700 },
-    beam: { max: 1500, safe: 1200, critical: 1350 }
+    truss: { max: 1800, safe: 1200, critical: 1500 }, // Reduced for more sensitivity
+    arch: { max: 2500, safe: 1800, critical: 2200 },  // Reduced for more sensitivity
+    beam: { max: 1200, safe: 800, critical: 1000 }    // Reduced for more sensitivity
   };
 
   const capacity = bridgeCapacities[bridgeType as keyof typeof bridgeCapacities];
@@ -1187,6 +1187,7 @@ const BridgeSimulator: React.FC<BridgeSimulatorProps> = ({
   const [internalLoadPoints, setInternalLoadPoints] = useState<LoadPoint[]>([]);
   const [currentWeight, setCurrentWeight] = useState(100);
   const vehiclesRef = useRef<Vehicle[]>([]);
+  const [realTimeDamageState, setRealTimeDamageState] = useState<DamageState | null>(null);
 
   const bridgeType = externalBridgeType || internalBridgeType;
   const loadPoints = externalLoadPoints || internalLoadPoints;
@@ -1231,11 +1232,20 @@ const BridgeSimulator: React.FC<BridgeSimulatorProps> = ({
     return calculateDamage(bridgeType, allLoadPoints);
   }, [bridgeType, loadPoints, calculateDynamicLoad]);
   
+  // Calculate dynamic loads for display
+  const [currentDynamicLoad, setCurrentDynamicLoad] = useState(0);
+  const [vehiclesOnBridgeCount, setVehiclesOnBridgeCount] = useState(0);
+  
   // Update analytics in real-time
   React.useEffect(() => {
     const updateAnalytics = () => {
       const { dynamicLoad, vehiclesOnBridge } = calculateDynamicLoad();
       const damageState = calculateTotalDamageState();
+      
+      // Update internal real-time damage state for bridge status display
+      setRealTimeDamageState(damageState);
+      setCurrentDynamicLoad(dynamicLoad);
+      setVehiclesOnBridgeCount(vehiclesOnBridge.length);
       
       if (onVehicleDataChange) {
         onVehicleDataChange(vehiclesOnBridge, dynamicLoad, damageState);
@@ -1320,6 +1330,27 @@ const BridgeSimulator: React.FC<BridgeSimulatorProps> = ({
         weight: 850,
         color: '#448844',
         direction: 1,
+        isOnBridge: false
+      },
+      // Additional heavy vehicles for testing
+      {
+        id: 'heavyTruck1',
+        position: [-65, 2.21, 0.6],
+        velocity: [0, 0, 0],
+        type: 'truck',
+        weight: 1200, // Heavy truck
+        color: '#ff4444',
+        direction: 1,
+        isOnBridge: false
+      },
+      {
+        id: 'heavyTruck2',
+        position: [65, 2.21, -0.6],
+        velocity: [0, 0, 0],
+        type: 'truck',
+        weight: 1100, // Heavy truck
+        color: '#4444ff',
+        direction: -1,
         isOnBridge: false
       },
       // Right to left traffic (left lane) - better spacing
@@ -1542,28 +1573,48 @@ const BridgeSimulator: React.FC<BridgeSimulatorProps> = ({
         </button>
       </div>
       
-      {/* Enhanced Status Display */}
+      {/* Enhanced Status Display - Real-time damage state */}
       <div className="absolute bottom-4 right-4 bg-card/90 backdrop-blur-sm p-4 rounded-lg shadow-panel border border-border max-w-sm">
-        <h3 className="font-semibold mb-2">Bridge Status</h3>
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="font-semibold">Bridge Status</h3>
+          {realTimeDamageState && (
+            <div className="flex items-center gap-1 text-xs text-orange-500">
+              <div className="w-2 h-2 bg-orange-500 rounded-full animate-pulse"></div>
+              LIVE
+            </div>
+          )}
+        </div>
         <div className={`text-lg font-bold mb-2 ${
-          damageState.warningLevel === 'safe' ? 'text-stress-safe' :
-          damageState.warningLevel === 'caution' ? 'text-stress-warning' :
-          damageState.warningLevel === 'danger' ? 'text-stress-danger' : 
+          (realTimeDamageState || damageState).warningLevel === 'safe' ? 'text-stress-safe' :
+          (realTimeDamageState || damageState).warningLevel === 'caution' ? 'text-stress-warning' :
+          (realTimeDamageState || damageState).warningLevel === 'danger' ? 'text-stress-danger' : 
           'text-stress-critical'
         }`}>
-          {damageState.warningLevel.toUpperCase()}
+          {(realTimeDamageState || damageState).warningLevel.toUpperCase()}
         </div>
         
         <div className="space-y-2 text-sm text-muted-foreground">
-          <div>Integrity: {Math.round(damageState.overallIntegrity * 100)}%</div>
-          {damageState.failureMode !== 'none' && (
+          <div>Integrity: {Math.round((realTimeDamageState || damageState).overallIntegrity * 100)}%</div>
+          {(realTimeDamageState || damageState).failureMode !== 'none' && (
             <div className="text-stress-critical font-semibold">
-              Failure Mode: {damageState.failureMode}
+              Failure Mode: {(realTimeDamageState || damageState).failureMode}
             </div>
           )}
-          <div>Active Cracks: {damageState.cracks.length}</div>
+          <div>Active Cracks: {(realTimeDamageState || damageState).cracks.length}</div>
           
-          {damageState.overallIntegrity < 0.5 && (
+          {/* Real-time vehicle load information */}
+          {currentDynamicLoad > 0 && (
+            <div className="pt-2 border-t border-border space-y-1">
+              <div className="text-orange-500 font-semibold text-xs">
+                🚗 VEHICLES ON BRIDGE: {vehiclesOnBridgeCount}
+              </div>
+              <div className="text-orange-500 text-xs">
+                Dynamic Load: +{currentDynamicLoad}kg
+              </div>
+            </div>
+          )}
+          
+          {(realTimeDamageState || damageState).overallIntegrity < 0.5 && (
             <div className="p-2 bg-destructive/10 border border-destructive/20 rounded text-destructive text-xs">
               ⚠️ Critical structural damage detected!
             </div>
