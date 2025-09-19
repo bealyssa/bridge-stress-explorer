@@ -600,6 +600,199 @@ const BeamBridge: React.FC<{ loadPoints: LoadPoint[]; damageState: DamageState }
   );
 };
 
+// Vehicle Component
+const Vehicle: React.FC<{ 
+  position: [number, number, number], 
+  color: string, 
+  type: 'car' | 'truck' | 'bus',
+  rotation?: [number, number, number]
+}> = ({ position, color, type, rotation = [0, 0, 0] }) => {
+  const meshRef = useRef<THREE.Group>(null);
+
+  const vehicleSpecs = {
+    car: { length: 1.8, width: 0.8, height: 0.6 },
+    truck: { length: 3.2, width: 1.0, height: 1.2 },
+    bus: { length: 4.0, width: 1.2, height: 1.4 }
+  };
+
+  const specs = vehicleSpecs[type];
+
+  return (
+    <group ref={meshRef} position={position} rotation={rotation}>
+      {/* Vehicle body */}
+      <mesh position={[0, specs.height / 2, 0]} castShadow>
+        <boxGeometry args={[specs.length, specs.height, specs.width]} />
+        <meshStandardMaterial color={color} />
+      </mesh>
+      
+      {/* Windshield */}
+      <mesh position={[specs.length * 0.3, specs.height * 0.8, 0]} castShadow>
+        <boxGeometry args={[specs.length * 0.3, specs.height * 0.4, specs.width * 0.9]} />
+        <meshStandardMaterial color="#87CEEB" transparent opacity={0.7} />
+      </mesh>
+      
+      {/* Wheels */}
+      <mesh position={[specs.length * 0.35, 0.15, specs.width * 0.45]} castShadow>
+        <cylinderGeometry args={[0.15, 0.15, 0.1]} />
+        <meshStandardMaterial color="#333333" />
+      </mesh>
+      <mesh position={[specs.length * 0.35, 0.15, -specs.width * 0.45]} castShadow>
+        <cylinderGeometry args={[0.15, 0.15, 0.1]} />
+        <meshStandardMaterial color="#333333" />
+      </mesh>
+      <mesh position={[-specs.length * 0.35, 0.15, specs.width * 0.45]} castShadow>
+        <cylinderGeometry args={[0.15, 0.15, 0.1]} />
+        <meshStandardMaterial color="#333333" />
+      </mesh>
+      <mesh position={[-specs.length * 0.35, 0.15, -specs.width * 0.45]} castShadow>
+        <cylinderGeometry args={[0.15, 0.15, 0.1]} />
+        <meshStandardMaterial color="#333333" />
+      </mesh>
+      
+      {/* Headlights */}
+      <mesh position={[specs.length * 0.5, specs.height * 0.5, specs.width * 0.35]} castShadow>
+        <sphereGeometry args={[0.08]} />
+        <meshStandardMaterial color="#FFFF99" emissive="#FFFF99" emissiveIntensity={0.3} />
+      </mesh>
+      <mesh position={[specs.length * 0.5, specs.height * 0.5, -specs.width * 0.35]} castShadow>
+        <sphereGeometry args={[0.08]} />
+        <meshStandardMaterial color="#FFFF99" emissive="#FFFF99" emissiveIntensity={0.3} />
+      </mesh>
+    </group>
+  );
+};
+
+// Animated Traffic System
+const TrafficSystem: React.FC = () => {
+  const vehiclesRef = useRef<THREE.Group[]>([]);
+  
+  // Vehicle data with different types, colors, speeds, and spawn times
+  const vehicleData = [
+    { id: 1, type: 'car' as const, color: '#FF4444', speed: 0.08, delay: 0, lane: 0.3 },
+    { id: 2, type: 'truck' as const, color: '#4444FF', speed: 0.06, delay: 2, lane: -0.3 },
+    { id: 3, type: 'car' as const, color: '#44FF44', speed: 0.09, delay: 4, lane: 0.3 },
+    { id: 4, type: 'bus' as const, color: '#FFFF44', speed: 0.05, delay: 6, lane: -0.3 },
+    { id: 5, type: 'car' as const, color: '#FF44FF', speed: 0.07, delay: 8, lane: 0.3 },
+    { id: 6, type: 'car' as const, color: '#44FFFF', speed: 0.08, delay: 10, lane: -0.3 },
+    { id: 7, type: 'truck' as const, color: '#888888', speed: 0.06, delay: 12, lane: 0.3 },
+    { id: 8, type: 'car' as const, color: '#FFA500', speed: 0.09, delay: 14, lane: -0.3 },
+  ];
+
+  // Vehicles going in opposite direction
+  const vehicleDataReverse = [
+    { id: 9, type: 'car' as const, color: '#800080', speed: 0.08, delay: 1, lane: -0.3 },
+    { id: 10, type: 'truck' as const, color: '#008000', speed: 0.06, delay: 3, lane: 0.3 },
+    { id: 11, type: 'car' as const, color: '#FFC0CB', speed: 0.09, delay: 5, lane: -0.3 },
+    { id: 12, type: 'bus' as const, color: '#A52A2A', speed: 0.05, delay: 7, lane: 0.3 },
+    { id: 13, type: 'car' as const, color: '#00FF7F', speed: 0.07, delay: 9, lane: -0.3 },
+    { id: 14, type: 'car' as const, color: '#DC143C', speed: 0.08, delay: 11, lane: 0.3 },
+    { id: 15, type: 'truck' as const, color: '#191970', speed: 0.06, delay: 13, lane: -0.3 },
+    { id: 16, type: 'car' as const, color: '#FFD700', speed: 0.09, delay: 15, lane: 0.3 },
+  ];
+
+  useFrame((state) => {
+    const time = state.clock.elapsedTime;
+    
+    // Animate left-to-right vehicles
+    vehicleData.forEach((vehicle, index) => {
+      if (vehiclesRef.current[index]) {
+        const startTime = vehicle.delay;
+        const cycleTime = 35; // Time for complete cycle
+        const adjustedTime = (time - startTime) % cycleTime;
+        
+        if (adjustedTime >= 0) {
+          // Calculate position along the path
+          const progress = adjustedTime * vehicle.speed;
+          let x = -30 + progress * 65; // Start at -30, end at 35
+          
+          // Reset when vehicle goes off screen
+          if (x > 35) {
+            x = -30 + ((x - 35) % 65);
+          }
+          
+          // Calculate Y position based on road curve
+          let y = 2.2; // Bridge height
+          if (x < -14) {
+            // On left approach road
+            y = 2.2;
+          } else if (x > 14) {
+            // On right approach road  
+            y = 2.2;
+          } else {
+            // On bridge - follow arch curve
+            const bridgeProgress = (x + 14) / 28;
+            y = 2.2 + 1.5 * Math.pow(1 - Math.pow((x / 14), 2), 0.8);
+          }
+          
+          vehiclesRef.current[index].position.set(x, y + 0.4, vehicle.lane);
+          vehiclesRef.current[index].rotation.set(0, 0, 0);
+        }
+      }
+    });
+    
+    // Animate right-to-left vehicles
+    vehicleDataReverse.forEach((vehicle, index) => {
+      const reverseIndex = index + vehicleData.length;
+      if (vehiclesRef.current[reverseIndex]) {
+        const startTime = vehicle.delay;
+        const cycleTime = 35;
+        const adjustedTime = (time - startTime) % cycleTime;
+        
+        if (adjustedTime >= 0) {
+          const progress = adjustedTime * vehicle.speed;
+          let x = 35 - progress * 65; // Start at 35, end at -30
+          
+          // Reset when vehicle goes off screen
+          if (x < -30) {
+            x = 35 - ((30 + x) % 65);
+          }
+          
+          // Calculate Y position
+          let y = 2.2;
+          if (x < -14) {
+            y = 2.2;
+          } else if (x > 14) {
+            y = 2.2;
+          } else {
+            const bridgeProgress = (x + 14) / 28;
+            y = 2.2 + 1.5 * Math.pow(1 - Math.pow((x / 14), 2), 0.8);
+          }
+          
+          vehiclesRef.current[reverseIndex].position.set(x, y + 0.4, vehicle.lane);
+          vehiclesRef.current[reverseIndex].rotation.set(0, Math.PI, 0);
+        }
+      }
+    });
+  });
+
+  return (
+    <group>
+      {/* Left-to-right vehicles */}
+      {vehicleData.map((vehicle, index) => (
+        <group key={vehicle.id} ref={(ref) => ref && (vehiclesRef.current[index] = ref)}>
+          <Vehicle
+            position={[-30, 2.6, vehicle.lane]}
+            color={vehicle.color}
+            type={vehicle.type}
+          />
+        </group>
+      ))}
+      
+      {/* Right-to-left vehicles */}
+      {vehicleDataReverse.map((vehicle, index) => (
+        <group key={vehicle.id} ref={(ref) => ref && (vehiclesRef.current[index + vehicleData.length] = ref)}>
+          <Vehicle
+            position={[35, 2.6, vehicle.lane]}
+            color={vehicle.color}
+            type={vehicle.type}
+            rotation={[0, Math.PI, 0]}
+          />
+        </group>
+      ))}
+    </group>
+  );
+};
+
 // Load Point Visualization
 const LoadPoint: React.FC<{ load: LoadPoint }> = ({ load }) => {
   const meshRef = useRef<THREE.Mesh>(null);
@@ -694,6 +887,12 @@ const Environment: React.FC = () => {
     }
   });
 
+  // Bridge connection points (where bridge ends)
+  const bridgeLeftEnd = -14; // Left bridge end position
+  const bridgeRightEnd = 14; // Right bridge end position
+  const bridgeHeight = 2.2; // Bridge deck height
+  const deckWidth = 2.1; // Bridge deck width
+
   return (
     <>
       {/* Sky gradient background */}
@@ -702,8 +901,8 @@ const Environment: React.FC = () => {
         <meshBasicMaterial color="#87CEEB" />
       </mesh>
       
-      {/* Water body beneath bridge with animation */}
-      <mesh ref={waterRef} position={[0, -0.5, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+      {/* Water body beneath bridge with animation - slightly below land to prevent z-fighting */}
+      <mesh ref={waterRef} position={[0, 1.45, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
         <planeGeometry args={[50, 41]} />
         <meshStandardMaterial 
           color="#4B9CD3"
@@ -714,61 +913,137 @@ const Environment: React.FC = () => {
         />
       </mesh>
       
-      {/* Land/terrain on left side */}
-      <mesh position={[-20, 0.1, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-        <planeGeometry args={[20, 40]} />
-        <meshStandardMaterial color="#228B22" />
-      </mesh>
+      {/* Large land mass on left side - realistic terrain */}
+      <group>
+        {/* Main land plateau */}
+        <mesh position={[-25, 1.5, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+          <planeGeometry args={[30, 50]} />
+          <meshStandardMaterial color="#2d5a3d" />
+        </mesh>
+        
+        {/* Land elevation towards bridge */}
+        <mesh position={[-20, bridgeHeight - 0.3, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+          <planeGeometry args={[20, 50]} />
+          <meshStandardMaterial color="#3a6b4a" />
+        </mesh>
+        
+        {/* Connecting slope to bridge level */}
+        <mesh position={[-16.5, bridgeHeight - 0.1, 0]} rotation={[-Math.PI / 2, 0.08, 0]} receiveShadow>
+          <planeGeometry args={[5, 50]} />
+          <meshStandardMaterial color="#228B22" />
+        </mesh>
+      </group>
       
-      {/* Land/terrain on right side */}
-      <mesh position={[20, 0.1, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-        <planeGeometry args={[20, 40]} />
-        <meshStandardMaterial color="#228B22" />
-      </mesh>
+      {/* Large land mass on right side - realistic terrain */}
+      <group>
+        {/* Main land plateau */}
+        <mesh position={[25, 1.5, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+          <planeGeometry args={[30, 50]} />
+          <meshStandardMaterial color="#2d5a3d" />
+        </mesh>
+        
+        {/* Land elevation towards bridge */}
+        <mesh position={[20, bridgeHeight - 0.3, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+          <planeGeometry args={[20, 50]} />
+          <meshStandardMaterial color="#3a6b4a" />
+        </mesh>
+        
+        {/* Connecting slope to bridge level */}
+        <mesh position={[16.5, bridgeHeight - 0.1, 0]} rotation={[-Math.PI / 2, -0.08, 0]} receiveShadow>
+          <planeGeometry args={[5, 50]} />
+          <meshStandardMaterial color="#228B22" />
+        </mesh>
+      </group>
       
-      {/* Approach road left */}
-      <mesh position={[-19, 3.2, 0]} rotation={[-Math.PI / 2, -0.1, 0]}>
-        <planeGeometry args={[10, 3.8]} />
-        <meshStandardMaterial color="#696969" />
-      </mesh>
+      {/* Road connecting to left bridge end - exact alignment */}
+      <group>
+        {/* Main approach road leading to bridge */}
+        <mesh position={[-20, bridgeHeight + 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <planeGeometry args={[12, deckWidth]} />
+          <meshStandardMaterial color="#2C2C2C" />
+        </mesh>
+        
+        {/* Road connection to bridge - seamless transition */}
+        <mesh position={[bridgeLeftEnd - 1, bridgeHeight + 0.015, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <planeGeometry args={[2, deckWidth]} />
+          <meshStandardMaterial color="#2C2C2C" />
+        </mesh>
+        
+        {/* Road shoulder/edges */}
+        <mesh position={[-20, bridgeHeight - 0.05, deckWidth/2 + 0.3]} rotation={[-Math.PI / 2, 0, 0]}>
+          <planeGeometry args={[14, 0.6]} />
+          <meshStandardMaterial color="#4a4a4a" />
+        </mesh>
+        <mesh position={[-20, bridgeHeight - 0.05, -deckWidth/2 - 0.3]} rotation={[-Math.PI / 2, 0, 0]}>
+          <planeGeometry args={[14, 0.6]} />
+          <meshStandardMaterial color="#4a4a4a" />
+        </mesh>
+      </group>
       
-      {/* Approach road right */}
-      <mesh position={[19, 3.2, 0]} rotation={[-Math.PI / 2, 0.1, 0]}>
-        <planeGeometry args={[10, 3.8]} />
-        <meshStandardMaterial color="#696969" />
-      </mesh>
+      {/* Road connecting to right bridge end - exact alignment */}
+      <group>
+        {/* Main approach road leading to bridge */}
+        <mesh position={[20, bridgeHeight + 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <planeGeometry args={[12, deckWidth]} />
+          <meshStandardMaterial color="#2C2C2C" />
+        </mesh>
+        
+        {/* Road connection to bridge - seamless transition */}
+        <mesh position={[bridgeRightEnd + 1, bridgeHeight + 0.015, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <planeGeometry args={[2, deckWidth]} />
+          <meshStandardMaterial color="#2C2C2C" />
+        </mesh>
+        
+        {/* Road shoulder/edges */}
+        <mesh position={[20, bridgeHeight - 0.05, deckWidth/2 + 0.3]} rotation={[-Math.PI / 2, 0, 0]}>
+          <planeGeometry args={[14, 0.6]} />
+          <meshStandardMaterial color="#4a4a4a" />
+        </mesh>
+        <mesh position={[20, bridgeHeight - 0.05, -deckWidth/2 - 0.3]} rotation={[-Math.PI / 2, 0, 0]}>
+          <planeGeometry args={[14, 0.6]} />
+          <meshStandardMaterial color="#4a4a4a" />
+        </mesh>
+      </group>
       
-      {/* Road markings */}
-      <mesh position={[-17, 2.16, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[0.2, 3]} />
+      {/* Road center line markings */}
+      <mesh position={[-20, bridgeHeight + 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[12, 0.08]} />
         <meshStandardMaterial color="#FFFF00" />
       </mesh>
-      <mesh position={[17, 2.16, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[0.2, 3]} />
+      <mesh position={[20, bridgeHeight + 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[12, 0.08]} />
         <meshStandardMaterial color="#FFFF00" />
       </mesh>
       
-      {/* Extended land surface */}
-      <mesh position={[-17, 2.14, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[10, 20]} />
-        <meshStandardMaterial color="#8B4513" />
+      {/* Road edge lines */}
+      <mesh position={[-20, bridgeHeight + 0.02, deckWidth/2]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[12, 0.05]} />
+        <meshStandardMaterial color="#FFFFFF" />
       </mesh>
-      <mesh position={[17, 2.14, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[10, 20]} />
-        <meshStandardMaterial color="#8B4513" />
+      <mesh position={[-20, bridgeHeight + 0.02, -deckWidth/2]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[12, 0.05]} />
+        <meshStandardMaterial color="#FFFFFF" />
+      </mesh>
+      <mesh position={[20, bridgeHeight + 0.02, deckWidth/2]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[12, 0.05]} />
+        <meshStandardMaterial color="#FFFFFF" />
+      </mesh>
+      <mesh position={[20, bridgeHeight + 0.02, -deckWidth/2]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[12, 0.05]} />
+        <meshStandardMaterial color="#FFFFFF" />
       </mesh>
       
-      {/* Trees on left side */}
-      {Array.from({ length: 12 }, (_, i) => {
-        const x = -22 + Math.random() * 10;
-        const z = -15 + Math.random() * 30;
-        const height = 2.5 + Math.random() * 1.5;
+      {/* Trees on left side land mass - distributed across the terrain */}
+      {Array.from({ length: 20 }, (_, i) => {
+        const x = -35 + Math.random() * 15; // Spread across left land mass
+        const z = -20 + Math.random() * 40;
+        const height = 2.5 + Math.random() * 2;
         return (
-          <group key={`tree-left-${i}`} position={[x, 0, z]}>
+          <group key={`tree-left-${i}`} position={[x, 1.5, z]}>
             {/* Tree trunk */}
             <mesh position={[0, height / 2, 0]} castShadow>
               <cylinderGeometry args={[0.15, 0.25, height]} />
-              <meshStandardMaterial color="#8B4513" />
+              <meshStandardMaterial color="#654321" />
             </mesh>
             {/* Tree foliage */}
             <mesh position={[0, height + 1, 0]} castShadow>
@@ -779,17 +1054,17 @@ const Environment: React.FC = () => {
         );
       })}
       
-      {/* Trees on right side - more spread out */}
-      {Array.from({ length: 18 }, (_, i) => {
-        const x = 35 - Math.random() * 15;
+      {/* Trees on right side land mass - distributed across the terrain */}
+      {Array.from({ length: 25 }, (_, i) => {
+        const x = 20 + Math.random() * 20; // Spread across right land mass
         const z = -25 + Math.random() * 50;
-        const height = 2.5 + Math.random() * 1.5;
+        const height = 2.5 + Math.random() * 2;
         return (
-          <group key={`tree-right-${i}`} position={[x, 0, z]}>
+          <group key={`tree-right-${i}`} position={[x, 1.5, z]}>
             {/* Tree trunk */}
             <mesh position={[0, height / 2, 0]} castShadow>
               <cylinderGeometry args={[0.15, 0.25, height]} />
-              <meshStandardMaterial color="#8B4513" />
+              <meshStandardMaterial color="#654321" />
             </mesh>
             {/* Tree foliage */}
             <mesh position={[0, height + 1, 0]} castShadow>
@@ -800,25 +1075,93 @@ const Environment: React.FC = () => {
         );
       })}
       
-      {/* Bridge abutments/foundations */}
-      <mesh position={[-14, 1, 0]} castShadow receiveShadow>
-        <boxGeometry args={[3.5, 3, 4.5]} />
+      {/* Bridge abutments/foundations - positioned UNDER the bridge, not blocking the road */}
+      {/* Left abutment - under bridge only */}
+      <mesh position={[bridgeLeftEnd, bridgeHeight - 1.5, deckWidth/2 + 1.5]} castShadow receiveShadow>
+        <boxGeometry args={[2, 2, 2]} />
         <meshStandardMaterial color="#A0A0A0" />
       </mesh>
-      <mesh position={[14, 1, 0]} castShadow receiveShadow>
-        <boxGeometry args={[3.5, 3, 4.5]} />
+      <mesh position={[bridgeLeftEnd, bridgeHeight - 1.5, -deckWidth/2 - 1.5]} castShadow receiveShadow>
+        <boxGeometry args={[2, 2, 2]} />
         <meshStandardMaterial color="#A0A0A0" />
       </mesh>
       
-      {/* Some rocks/boulders for realism */}
-      {Array.from({ length: 6 }, (_, i) => {
-        const x = -10 + Math.random() * 20;
-        const z = -8 + Math.random() * 16;
-        const size = 0.3 + Math.random() * 0.4;
+      {/* Right abutment - under bridge only */}
+      <mesh position={[bridgeRightEnd, bridgeHeight - 1.5, deckWidth/2 + 1.5]} castShadow receiveShadow>
+        <boxGeometry args={[2, 2, 2]} />
+        <meshStandardMaterial color="#A0A0A0" />
+      </mesh>
+      <mesh position={[bridgeRightEnd, bridgeHeight - 1.5, -deckWidth/2 - 1.5]} castShadow receiveShadow>
+        <boxGeometry args={[2, 2, 2]} />
+        <meshStandardMaterial color="#A0A0A0" />
+      </mesh>
+      
+      {/* Bridge support pillars - under the road area but not blocking traffic */}
+      <mesh position={[bridgeLeftEnd, bridgeHeight - 2, 0]} castShadow receiveShadow>
+        <cylinderGeometry args={[0.5, 0.7, 3]} />
+        <meshStandardMaterial color="#A0A0A0" />
+      </mesh>
+      <mesh position={[bridgeRightEnd, bridgeHeight - 2, 0]} castShadow receiveShadow>
+        <cylinderGeometry args={[0.5, 0.7, 3]} />
+        <meshStandardMaterial color="#A0A0A0" />
+      </mesh>
+      
+      {/* Retaining walls for road approaches */}
+      <mesh position={[-22, bridgeHeight - 0.5, deckWidth/2 + 0.8]} castShadow receiveShadow>
+        <boxGeometry args={[16, 1.5, 0.3]} />
+        <meshStandardMaterial color="#A0A0A0" />
+      </mesh>
+      <mesh position={[-22, bridgeHeight - 0.5, -deckWidth/2 - 0.8]} castShadow receiveShadow>
+        <boxGeometry args={[16, 1.5, 0.3]} />
+        <meshStandardMaterial color="#A0A0A0" />
+      </mesh>
+      <mesh position={[22, bridgeHeight - 0.5, deckWidth/2 + 0.8]} castShadow receiveShadow>
+        <boxGeometry args={[16, 1.5, 0.3]} />
+        <meshStandardMaterial color="#A0A0A0" />
+      </mesh>
+      <mesh position={[22, bridgeHeight - 0.5, -deckWidth/2 - 0.8]} castShadow receiveShadow>
+        <boxGeometry args={[16, 1.5, 0.3]} />
+        <meshStandardMaterial color="#A0A0A0" />
+      </mesh>
+      
+      {/* Some rocks/boulders scattered around for realism */}
+      {Array.from({ length: 12 }, (_, i) => {
+        const x = -15 + Math.random() * 30;
+        const z = -10 + Math.random() * 20;
+        const size = 0.3 + Math.random() * 0.5;
+        // Don't place rocks on the road
+        if (Math.abs(z) > deckWidth/2 + 1) {
+          return (
+            <mesh key={`rock-${i}`} position={[x, size / 2, z]} castShadow receiveShadow>
+              <sphereGeometry args={[size]} />
+              <meshStandardMaterial color="#696969" />
+            </mesh>
+          );
+        }
+        return null;
+      })}
+      
+      {/* Small buildings/structures on distant land for context */}
+      {Array.from({ length: 3 }, (_, i) => {
+        const x = -40 + i * 5;
+        const z = -15 + Math.random() * 10;
+        const height = 3 + Math.random() * 2;
         return (
-          <mesh key={`rock-${i}`} position={[x, size / 2, z]} castShadow receiveShadow>
-            <sphereGeometry args={[size]} />
-            <meshStandardMaterial color="#808080" />
+          <mesh key={`building-left-${i}`} position={[x, 1.5 + height/2, z]} castShadow>
+            <boxGeometry args={[2, height, 2]} />
+            <meshStandardMaterial color="#8B4513" />
+          </mesh>
+        );
+      })}
+      
+      {Array.from({ length: 4 }, (_, i) => {
+        const x = 35 + i * 4;
+        const z = -10 + Math.random() * 15;
+        const height = 3 + Math.random() * 2;
+        return (
+          <mesh key={`building-right-${i}`} position={[x, 1.5 + height/2, z]} castShadow>
+            <boxGeometry args={[2, height, 2]} />
+            <meshStandardMaterial color="#8B4513" />
           </mesh>
         );
       })}
@@ -908,6 +1251,9 @@ const BridgeSimulator: React.FC<BridgeSimulatorProps> = ({
         
         {/* Environment (sky, water, land, trees) */}
         <Environment />
+        
+        {/* Animated Traffic System */}
+        <TrafficSystem />
         
         <Bridge 
           bridgeType={bridgeType} 
