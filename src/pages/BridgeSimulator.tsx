@@ -89,6 +89,7 @@ const calculateDamageState = (bridgeType: string, loadPoints: LoadPoint[]): Dama
 
 const BridgeSimulator = () => {
     const [bridgeType, setBridgeType] = useState<'truss' | 'arch'>('truss');
+    const [trussMaterial, setTrussMaterial] = useState<'steel' | 'wood' | 'concrete'>('steel');
     const [loadPoints, setLoadPoints] = useState<LoadPoint[]>([]);
     const [showAnalytics, setShowAnalytics] = useState(true);
     const [currentWeight, setCurrentWeight] = useState(100);
@@ -268,7 +269,7 @@ const BridgeSimulator = () => {
                                 {(bridgeType === 'truss' || bridgeType === 'arch') && (
                                     <>
                                         {bridgeType === 'truss' ? (
-                                            <TrussBridge loadPoints={loadPoints} damageState={damageState} />
+                                            <TrussBridge loadPoints={loadPoints} damageState={damageState} material={trussMaterial} />
                                         ) : (
                                             <ArchBridge loadPoints={loadPoints} damageState={damageState} />
                                         )}
@@ -307,6 +308,31 @@ const BridgeSimulator = () => {
                                         ))}
                                     </div>
                                 </div>
+                                {bridgeType === 'truss' && (
+                                    <div className="bg-card/90 backdrop-blur-sm p-4 rounded-lg shadow-panel border border-border">
+                                        <h3 className="font-semibold mb-3">Truss Material</h3>
+                                        <div className="flex gap-2">
+                                            <button
+                                                className={`px-3 py-2 rounded text-sm font-medium transition-all ${trussMaterial === 'wood' ? 'bg-amber-600 text-white' : 'bg-secondary'}`}
+                                                onClick={() => setTrussMaterial('wood')}
+                                            >
+                                                Balsa Wood
+                                            </button>
+                                            <button
+                                                className={`px-3 py-2 rounded text-sm font-medium transition-all ${trussMaterial === 'concrete' ? 'bg-amber-600 text-white' : 'bg-secondary'}`}
+                                                onClick={() => setTrussMaterial('concrete')}
+                                            >
+                                                Concrete
+                                            </button>
+                                            <button
+                                                className={`px-3 py-2 rounded text-sm font-medium transition-all ${trussMaterial === 'steel' ? 'bg-amber-600 text-white' : 'bg-secondary'}`}
+                                                onClick={() => setTrussMaterial('steel')}
+                                            >
+                                                Steel
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
                                 <div className="bg-card/90 backdrop-blur-sm p-4 rounded-lg shadow-panel border border-border">
                                     <h3 className="font-semibold mb-3">Load Weight</h3>
                                     <input

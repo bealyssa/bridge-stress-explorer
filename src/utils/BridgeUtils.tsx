@@ -2,7 +2,27 @@ import React, { useRef, useCallback } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { Sphere, Cylinder, Text } from '@react-three/drei';
 import * as THREE from 'three';
-import type { LoadPoint, DamageState } from '../components/BridgeSimulator';
+// Type definitions moved from BridgeSimulator for shared use
+export interface LoadPoint {
+    id: string;
+    position: [number, number, number];
+    weight: number;
+}
+
+export type FailureMode = 'none' | 'collapse' | 'buckling' | 'shear' | 'bending';
+export type WarningLevel = 'safe' | 'caution' | 'danger' | 'critical' | 'failure';
+export interface CrackData {
+    id: string;
+    severity: number;
+    points: [number, number, number][];
+    type: 'surface' | 'structural' | 'critical';
+}
+export interface DamageState {
+    cracks: CrackData[];
+    overallIntegrity: number;
+    failureMode: FailureMode;
+    warningLevel: WarningLevel;
+}
 
 // Vehicle Component with improved real-time collision detection (Memoized)
 const VehicleComponent: React.FC<{

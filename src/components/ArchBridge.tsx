@@ -2,7 +2,7 @@ import React, { useRef } from 'react';
 import * as THREE from 'three';
 import { Line } from '@react-three/drei';
 import DamageVisualization from './DamageVisualization';
-import { LoadPoint, DamageState } from './BridgeSimulator';
+import type { LoadPoint, DamageState } from '../utils/BridgeUtils';
 
 const ArchBridge: React.FC<{ loadPoints: LoadPoint[]; damageState: DamageState }> = ({ loadPoints, damageState }) => {
     const bridgeRef = useRef<THREE.Group>(null);
