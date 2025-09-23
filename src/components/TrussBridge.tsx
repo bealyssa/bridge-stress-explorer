@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import DamageVisualization from './DamageVisualization';
 import type { LoadPoint, DamageState } from '../utils/BridgeUtils';
 
-type TrussMaterial = 'steel' | 'wood' | 'concrete';
+type TrussMaterial = 'steel' | 'wood';
 
 const TrussBridge: React.FC<{ loadPoints: LoadPoint[]; damageState: DamageState; material?: TrussMaterial }> = ({ loadPoints, damageState, material = 'steel' }) => {
     const bridgeRef = useRef<THREE.Group>(null);
@@ -51,9 +51,7 @@ const TrussBridge: React.FC<{ loadPoints: LoadPoint[]; damageState: DamageState;
             return { color: '#6b1f16', metalness: 0.0, roughness: 0.88, map: woodTexture };
         }
 
-        if (material === 'concrete') {
-            return { color: '#9e9e9e', metalness: 0.0, roughness: 1.0 };
-        }
+        // no concrete branch anymore; fall through to steel default
 
         // default steel: use stress-to-color mapping from getStressColor for visuals
         const stressColor = getStressColor(position);
@@ -62,7 +60,6 @@ const TrussBridge: React.FC<{ loadPoints: LoadPoint[]; damageState: DamageState;
 
     const getPlateMaterialProps = () => {
         if (material === 'wood') return { color: '#8B5A2B', metalness: 0.0, roughness: 0.9, map: woodTexture };
-        if (material === 'concrete') return { color: '#7d7d7d', metalness: 0.0, roughness: 1.0 };
         return { color: '#455a64', metalness: 0.9, roughness: 0.1 };
     };
 
@@ -575,6 +572,38 @@ const TrussBridge: React.FC<{ loadPoints: LoadPoint[]; damageState: DamageState;
                 );
             })}
 
+            {/* Steel pier caps and piers beneath the bridge (visible only for steel material) */}
+            {material === 'steel' && (() => {
+                const pierDepth = 6; // how far below the deck the pier extends
+                const capHeight = 0.22;
+                const capWidth = trussWidth + 0.8;
+                const shaftWidth = 0.4;
+                return (
+                    <group key="steel-piers">
+                        {Array.from({ length: numPanels + 1 }, (_, i) => {
+                            const x = -bridgeLength / 2 + (i * trussSpacing);
+                            // top of pier should sit under the deck base (deck thickness ~0.38)
+                            const capY = deckHeight - 0.19 - capHeight / 2;
+                            const shaftY = capY - capHeight / 2 - pierDepth / 2;
+                            return (
+                                <group key={`pier-${i}`} position={[x, 0, 0]}>
+                                    {/* Pier cap: spreads across truss width */}
+                                    <mesh position={[0, capY, 0]}>
+                                        <boxGeometry args={[capWidth, capHeight, 1.2]} />
+                                        <meshStandardMaterial color="#546e7a" metalness={0.9} roughness={0.2} />
+                                    </mesh>
+                                    {/* Pier shaft: rectangular column going down into the riverbed */}
+                                    <mesh position={[0, shaftY, 0]}>
+                                        <boxGeometry args={[shaftWidth, pierDepth, 0.6]} />
+                                        <meshStandardMaterial color="#37474f" metalness={0.85} roughness={0.25} />
+                                    </mesh>
+                                </group>
+                            );
+                        })}
+                    </group>
+                );
+            })()}
+
             {/* If material is wood, add a wooden roof and connector members */}
             {material === 'wood' && (
                 <group>
@@ -621,7 +650,7 @@ const TrussBridge: React.FC<{ loadPoints: LoadPoint[]; damageState: DamageState;
                 </group>
             )}
 
-            {/* Enhanced bridge deck with concrete surface */}
+            {/* Enhanced bridge deck base and surface */}
             <group>
                 {/* Structural base of deck (kept for both materials) */}
                 <mesh position={[0, deckHeight, 0]}>
