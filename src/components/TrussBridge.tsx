@@ -8,23 +8,104 @@ type TrussMaterial = 'steel' | 'wood';
 const TrussBridge: React.FC<{ loadPoints: LoadPoint[]; damageState: DamageState; material?: TrussMaterial }> = ({ loadPoints, damageState, material = 'steel' }) => {
     const bridgeRef = useRef<THREE.Group>(null);
 
-    // Realistic stress color gradient with steel colors
-    const getStressColor = (position: [number, number, number]) => {
-        let maxStress = 0;
-        loadPoints.forEach(load => {
-            const dist = Math.sqrt(
+    // Professional Heat Map Color System - Like MIDAS Civil
+    const getHeatMapColor = (position: [number, number, number], elementType: 'member' | 'joint' | 'deck' = 'member') => {
+        // Only show heat map for manual loads (not vehicle loads)
+        const manualLoads = loadPoints.filter(load => load.type === 'manual' || (!load.type && !load.id.startsWith('vehicle-')));
+
+        if (manualLoads.length === 0) {
+            return '#1976D2'; // Professional blue - no stress state
+        }
+
+        let totalStress = 0;
+        let maxDistance = bridgeLength / 2;
+
+        // Calculate stress only from manual loads
+        manualLoads.forEach(load => {
+            const distance = Math.sqrt(
                 Math.pow(position[0] - load.position[0], 2) +
                 Math.pow(position[2] - load.position[2], 2)
             );
-            maxStress += load.weight / (1 + dist * 2);
+
+            // Different stress propagation for different elements
+            let stressInfluence = 0;
+            switch (elementType) {
+                case 'deck':
+                    // Deck experiences direct load transfer
+                    stressInfluence = load.weight / (1 + distance * 0.3);
+                    break;
+                case 'member':
+                    // Truss members distribute stress through structure
+                    stressInfluence = load.weight / (1 + distance * 0.8);
+                    break;
+                case 'joint':
+                    // Joints concentrate stress
+                    stressInfluence = load.weight / (1 + distance * 0.5);
+                    break;
+            }
+
+            totalStress += stressInfluence;
         });
-        // Damage amplifies stress
-        const damageMultiplier = 1 + (1 - damageState.overallIntegrity) * 2.5;
-        maxStress *= damageMultiplier;
-        if (maxStress < 100) return '#b0bec5'; // Light steel blue
-        if (maxStress < 200) return '#ffd54f'; // Warning yellow
-        if (maxStress < 300) return '#ff8a65'; // Orange stress
-        return '#e53e3e'; // Critical red
+
+        // Add position-based stress (mid-span has higher stress)
+        const midSpanFactor = 1 + Math.abs(position[0]) / maxDistance * 0.3;
+        totalStress *= midSpanFactor;
+
+        // Damage amplifies stress visualization
+        const damageMultiplier = 1 + (1 - damageState.overallIntegrity) * 2;
+        totalStress *= damageMultiplier;
+
+        // Professional thermal color scale - Blue to Red
+        const normalizedStress = Math.min(totalStress / 400, 1); // Normalize to 0-1
+
+        if (normalizedStress < 0.1) return '#0D47A1';      // Deep Blue - Very Low
+        if (normalizedStress < 0.2) return '#1976D2';      // Blue - Low  
+        if (normalizedStress < 0.3) return '#42A5F5';      // Light Blue
+        if (normalizedStress < 0.4) return '#81C784';      // Light Green
+        if (normalizedStress < 0.5) return '#66BB6A';      // Green - Safe
+        if (normalizedStress < 0.6) return '#FFEB3B';      // Yellow - Caution
+        if (normalizedStress < 0.7) return '#FFA726';      // Orange - Warning
+        if (normalizedStress < 0.8) return '#FF7043';      // Orange-Red
+        if (normalizedStress < 0.9) return '#F44336';      // Red - Critical
+        return '#D32F2F';                                  // Dark Red - Extreme
+    };
+
+    // Get material properties with heat map override
+    const getHeatMapMaterial = (position: [number, number, number], elementType: 'member' | 'joint' | 'deck' = 'member') => {
+        // Only apply heat map colors for manual loads (both wood and steel)
+        const manualLoads = loadPoints.filter(load => load.type === 'manual' || (!load.type && !load.id.startsWith('vehicle-')));
+
+        if (manualLoads.length > 0) {
+            const heatColor = getHeatMapColor(position, elementType);
+            return {
+                color: heatColor,
+                metalness: 0.3,     // Slight metallic look for realism
+                roughness: 0.6,     // Not too shiny
+                emissive: heatColor,
+                emissiveIntensity: 0.1  // Slight glow for heat effect
+            };
+        }
+
+        // Default materials when no manual loads
+        if (material === 'wood') {
+            return {
+                color: '#8B5A2B',   // Brown wood color
+                metalness: 0.0,
+                roughness: 0.9
+            };
+        }
+
+        return {
+            color: '#9e9e9e',   // Steel gray
+            metalness: 0.8,
+            roughness: 0.2
+        };
+    };
+
+    // Calculate structural deformation based on loads - DISABLED FOR VISUAL STABILITY
+    const getDeformation = (position: [number, number, number]): [number, number, number] => {
+        // Return no deformation - keep bridge shape stable
+        return [0, 0, 0];
     };
 
 
@@ -44,38 +125,26 @@ const TrussBridge: React.FC<{ loadPoints: LoadPoint[]; damageState: DamageState;
         localStress *= damageMultiplier;
 
         if (material === 'wood') {
-            // Map stress to warm wood tones (no metallic or blue hues)
-            if (localStress < 100) return { color: '#8B5A2B', metalness: 0.0, roughness: 0.95, map: woodTexture };
-            if (localStress < 200) return { color: '#A9754B', metalness: 0.0, roughness: 0.92, map: woodTexture };
-            if (localStress < 300) return { color: '#8B3A20', metalness: 0.0, roughness: 0.9, map: woodTexture };
-            return { color: '#6b1f16', metalness: 0.0, roughness: 0.88, map: woodTexture };
+            // Use heat map visualization for wood as well
+            return getHeatMapMaterial(position, 'member');
         }
 
         // no concrete branch anymore; fall through to steel default
 
-        // default steel: use stress-to-color mapping from getStressColor for visuals
-        const stressColor = getStressColor(position);
-        return { color: stressColor, metalness: 0.8, roughness: 0.2 };
+        // default steel: use heat map material for complete thermal visualization
+        const heatMaterial = getHeatMapMaterial(position);
+        return heatMaterial;
     };
 
-    const getPlateMaterialProps = () => {
-        if (material === 'wood') return { color: '#8B5A2B', metalness: 0.0, roughness: 0.9, map: woodTexture };
-        return { color: '#455a64', metalness: 0.9, roughness: 0.1 };
+    const getPlateMaterialProps = (position: [number, number, number] = [0, deckHeight + bridgeHeight, 0]) => {
+        // Use heat map visualization for all materials now
+        return getHeatMapMaterial(position, 'joint');
     };
 
-    // Realistic deformation: nodes sag based on local stress
+    // Realistic deformation: DISABLED - No structural deformation
     const getDamageOffset = (position: [number, number, number]) => {
-        let localStress = 0;
-        loadPoints.forEach(load => {
-            const dist = Math.sqrt(
-                Math.pow(position[0] - load.position[0], 2) +
-                Math.pow(position[2] - load.position[2], 2)
-            );
-            localStress += load.weight / (1 + dist * 2);
-        });
-        const damage = 1 - damageState.overallIntegrity;
-        // Sag more as damage increases
-        return -localStress * 0.003 * (1 + damage * 1.5);
+        // Return 0 - no deformation applied
+        return 0;
     };
 
     // Collapse: break apart when integrity is very low
@@ -145,18 +214,24 @@ const TrussBridge: React.FC<{ loadPoints: LoadPoint[]; damageState: DamageState;
                 {/* Top chord nodes - larger and more detailed */}
                 {Array.from({ length: numPanels + 1 }, (_, i) => {
                     const x = -bridgeLength / 2 + (i * trussSpacing);
-                    const y = deckHeight + bridgeHeight + getDamageOffset([x, deckHeight + bridgeHeight, 0]);
+                    const baseY = deckHeight + bridgeHeight;
+                    const y = baseY + getDamageOffset([x, baseY, 0]);
+
                     return (
                         <group key={`top-left-${i}`} position={[x, y, 0]}>
                             {material === 'wood' ? (
                                 <mesh>
                                     <boxGeometry args={[0.25, 0.25, 0.08]} />
-                                    <meshStandardMaterial {...(getPlateMaterialProps())} />
+                                    <meshStandardMaterial
+                                        {...getHeatMapMaterial([x, baseY, -trussWidth / 2], 'joint')}
+                                    />
                                 </mesh>
                             ) : (
                                 <mesh>
                                     <sphereGeometry args={[0.15, 16, 16]} />
-                                    <meshStandardMaterial {...getMemberMaterialProps([x, y, 0])} />
+                                    <meshStandardMaterial
+                                        {...getHeatMapMaterial([x, baseY, -trussWidth / 2], 'joint')}
+                                    />
                                 </mesh>
                             )}
                             {/* Connection plates */}
@@ -198,16 +273,21 @@ const TrussBridge: React.FC<{ loadPoints: LoadPoint[]; damageState: DamageState;
                 {Array.from({ length: numPanels }, (_, i) => {
                     const x1 = -bridgeLength / 2 + (i * trussSpacing);
                     const x2 = -bridgeLength / 2 + ((i + 1) * trussSpacing);
-                    const y = deckHeight + bridgeHeight + getDamageOffset([(x1 + x2) / 2, deckHeight + bridgeHeight, 0]);
+                    const centerX = (x1 + x2) / 2;
+                    const baseY = deckHeight + bridgeHeight;
+                    const y = baseY + getDamageOffset([centerX, baseY, 0]);
                     const length = Math.sqrt(Math.pow(x2 - x1, 2));
+
                     return (
-                        <group key={`top-beam-left-${i}`} position={[(x1 + x2) / 2, y, 0]}>
+                        <group key={`top-beam-left-${i}`} position={[centerX, y, 0]}>
                             {material === 'wood' ? (
                                 <>
                                     {/* Wooden longitudinal plank */}
                                     <mesh>
                                         <boxGeometry args={[length, 0.18, 0.5]} />
-                                        <meshStandardMaterial map={woodTexture} color="#A9754B" roughness={0.95} metalness={0} />
+                                        <meshStandardMaterial
+                                            {...getHeatMapMaterial([centerX, baseY, -trussWidth / 2], 'member')}
+                                        />
                                     </mesh>
                                 </>
                             ) : (
@@ -215,12 +295,16 @@ const TrussBridge: React.FC<{ loadPoints: LoadPoint[]; damageState: DamageState;
                                     {/* Main I-beam web */}
                                     <mesh>
                                         <boxGeometry args={[length, 0.25, 0.08]} />
-                                        <meshStandardMaterial {...getMemberMaterialProps([(x1 + x2) / 2, deckHeight + bridgeHeight, 0])} />
+                                        <meshStandardMaterial
+                                            {...getHeatMapMaterial([centerX, baseY, -trussWidth / 2], 'member')}
+                                        />
                                     </mesh>
                                     {/* Top flange */}
                                     <mesh position={[0, 0.1, 0]}>
                                         <boxGeometry args={[length, 0.05, 0.18]} />
-                                        <meshStandardMaterial {...getMemberMaterialProps([(x1 + x2) / 2, deckHeight + bridgeHeight, 0])} />
+                                        <meshStandardMaterial
+                                            {...getHeatMapMaterial([centerX, baseY, -trussWidth / 2], 'member')}
+                                        />
                                     </mesh>
                                     {/* Bottom flange */}
                                     <mesh position={[0, -0.1, 0]}>
@@ -406,7 +490,7 @@ const TrussBridge: React.FC<{ loadPoints: LoadPoint[]; damageState: DamageState;
                                         {/* Wooden longitudinal plank */}
                                         <mesh>
                                             <boxGeometry args={[length, 0.18, 0.5]} />
-                                            <meshStandardMaterial color="#A9754B" roughness={0.95} metalness={0} />
+                                            <meshStandardMaterial {...getHeatMapMaterial([(x1 + x2) / 2, yTop, 0], 'member')} />
                                         </mesh>
                                     </>
                                 ) : (
@@ -431,7 +515,7 @@ const TrussBridge: React.FC<{ loadPoints: LoadPoint[]; damageState: DamageState;
                                 {material === 'wood' ? (
                                     <mesh>
                                         <boxGeometry args={[length, 0.18, 0.5]} />
-                                        <meshStandardMaterial map={woodTexture} color="#A9754B" roughness={0.95} metalness={0} />
+                                        <meshStandardMaterial {...getHeatMapMaterial([(x1 + x2) / 2, yBottom, 0], 'member')} />
                                     </mesh>
                                 ) : (
                                     <>
@@ -625,12 +709,18 @@ const TrussBridge: React.FC<{ loadPoints: LoadPoint[]; damageState: DamageState;
                                 {/* Main continuous roof plank */}
                                 <mesh>
                                     <boxGeometry args={[bridgeLength + overhang * 2, roofThickness, trussWidth + 0.6]} />
-                                    <meshStandardMaterial color="#8B5A2B" roughness={0.9} metalness={0} />
+                                    <meshStandardMaterial {...(() => {
+                                        const manualLoads = loadPoints.filter(load => load.type === 'manual' || (!load.type && !load.id.startsWith('vehicle-')));
+                                        return manualLoads.length > 0 ? getHeatMapMaterial([0, roofY, 0], 'deck') : { color: '#8B5A2B', roughness: 0.9, metalness: 0 };
+                                    })()} />
                                 </mesh>
                                 {/* Top skin to hide seams and look like a solid roof */}
                                 <mesh position={[0, -roofHalf, 0]}>
                                     <boxGeometry args={[bridgeLength + overhang * 2, 0.02, trussWidth + 0.5]} />
-                                    <meshStandardMaterial color="#A9754B" roughness={0.95} metalness={0} />
+                                    <meshStandardMaterial {...(() => {
+                                        const manualLoads = loadPoints.filter(load => load.type === 'manual' || (!load.type && !load.id.startsWith('vehicle-')));
+                                        return manualLoads.length > 0 ? getHeatMapMaterial([0, roofY - roofHalf, 0], 'deck') : { color: '#A9754B', roughness: 0.95, metalness: 0 };
+                                    })()} />
                                 </mesh>
                             </group>
                         );
@@ -641,21 +731,39 @@ const TrussBridge: React.FC<{ loadPoints: LoadPoint[]; damageState: DamageState;
                     {/* Side wooden rails/trails to visually connect roof and deck */}
                     <mesh position={[0, deckHeight + 0.05, trussWidth / 2 + 0.2]}>
                         <boxGeometry args={[bridgeLength, 0.08, 0.1]} />
-                        <meshStandardMaterial color="#8B5A2B" roughness={0.95} metalness={0} />
+                        <meshStandardMaterial {...(() => {
+                            const manualLoads = loadPoints.filter(load => load.type === 'manual' || (!load.type && !load.id.startsWith('vehicle-')));
+                            return manualLoads.length > 0 ? getHeatMapMaterial([0, deckHeight + 0.05, trussWidth / 2 + 0.2], 'member') : { color: '#8B5A2B', roughness: 0.95, metalness: 0 };
+                        })()} />
                     </mesh>
                     <mesh position={[0, deckHeight + 0.05, -trussWidth / 2 - 0.2]}>
                         <boxGeometry args={[bridgeLength, 0.08, 0.1]} />
-                        <meshStandardMaterial color="#8B5A2B" roughness={0.95} metalness={0} />
+                        <meshStandardMaterial {...(() => {
+                            const manualLoads = loadPoints.filter(load => load.type === 'manual' || (!load.type && !load.id.startsWith('vehicle-')));
+                            return manualLoads.length > 0 ? getHeatMapMaterial([0, deckHeight + 0.05, -trussWidth / 2 - 0.2], 'member') : { color: '#8B5A2B', roughness: 0.95, metalness: 0 };
+                        })()} />
                     </mesh>
                 </group>
             )}
 
-            {/* Enhanced bridge deck base and surface */}
+            {/* Enhanced bridge deck base and surface with stress visualization */}
             <group>
                 {/* Structural base of deck (kept for both materials) */}
                 <mesh position={[0, deckHeight, 0]}>
                     <boxGeometry args={[bridgeLength, 0.38, 2.8]} />
-                    <meshStandardMaterial color={material === 'wood' ? '#8b5a2b' : '#9e9e9e'} roughness={material === 'wood' ? 0.98 : 0.8} />
+                    <meshStandardMaterial
+                        {...(() => {
+                            // Only use heat map when manual loads are present (both wood and steel)
+                            const manualLoads = loadPoints.filter(load => load.type === 'manual' || (!load.type && !load.id.startsWith('vehicle-')));
+                            return manualLoads.length > 0 ?
+                                getHeatMapMaterial([0, deckHeight, 0], 'deck') :
+                                {
+                                    color: material === 'wood' ? '#8b5a2b' : '#9e9e9e',
+                                    roughness: material === 'wood' ? 0.98 : 0.8,
+                                    metalness: material === 'wood' ? 0.0 : 0.8
+                                };
+                        })()}
+                    />
                 </mesh>
 
                 {/* Wooden planked surface when in wood mode: many short planks across the length (seams between planks) */}
@@ -665,17 +773,31 @@ const TrussBridge: React.FC<{ loadPoints: LoadPoint[]; damageState: DamageState;
                         const seam = 0.02; // small gap between planks
                         const plankFull = bridgeLength / plankCount;
                         const plankLength = plankFull - seam;
-                        const y = deckHeight + 0.21;
+                        const baseY = deckHeight + 0.21;
                         return (
                             <group>
                                 {Array.from({ length: plankCount }, (_, i) => {
                                     const x = -bridgeLength / 2 + i * plankFull + plankFull / 2;
-                                    // slight color jitter for realism
-                                    const tint = (i % 3) * 0.02;
+
+                                    // Apply heat map material to individual planks (only for manual loads)
+                                    const manualLoads = loadPoints.filter(load => load.type === 'manual' || (!load.type && !load.id.startsWith('vehicle-')));
+                                    const heatMapProps = manualLoads.length > 0 ?
+                                        getHeatMapMaterial([x, baseY, 0], 'deck') :
+                                        {
+                                            color: `#${(0xA9754B + Math.floor(((i % 3) * 0.02) * 255)).toString(16).slice(0, 6)}`,
+                                            map: woodTexture,
+                                            roughness: 0.95,
+                                            metalness: 0
+                                        };
+
                                     return (
-                                        <mesh key={`plank-${i}`} position={[x, y, 0]}>
+                                        <mesh key={`plank-${i}`} position={[x, baseY, 0]}>
                                             <boxGeometry args={[plankLength, 0.02, 2.6]} />
-                                            <meshStandardMaterial map={woodTexture} color={`#${(0xA9754B + Math.floor(tint * 255)).toString(16).slice(0, 6)}`} roughness={0.95} metalness={0} />
+                                            <meshStandardMaterial
+                                                {...heatMapProps}
+                                                roughness={0.95}
+                                                metalness={0}
+                                            />
                                         </mesh>
                                     );
                                 })}
@@ -683,7 +805,7 @@ const TrussBridge: React.FC<{ loadPoints: LoadPoint[]; damageState: DamageState;
                                 {Array.from({ length: plankCount - 1 }, (_, i) => {
                                     const x = -bridgeLength / 2 + (i + 1) * plankFull;
                                     return (
-                                        <mesh key={`seam-${i}`} position={[x, y, 0]}>
+                                        <mesh key={`seam-${i}`} position={[x, baseY, 0]}>
                                             <boxGeometry args={[seam, 0.021, 2.6]} />
                                             <meshStandardMaterial color="#52331f" roughness={0.98} metalness={0} />
                                         </mesh>

@@ -1,11 +1,11 @@
-// Removed duplicate import
-import React, { useRef, useState, useCallback, useMemo } from 'react';
+import React, { useRef, useState, useCallback, useMemo, useEffect } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
 import DamageVisualization from '@/components/DamageVisualization';
 import TrussBridge from '@/components/TrussBridge';
 import ArchBridge from '@/components/ArchBridge';
+import StressAnalysisPanel from '@/components/StressAnalysisPanel';
 import { VehicleComponent, LoadPoint as LoadPointVis, ClickHandler } from '@/utils/BridgeUtils';
 import Environment from '@/components/Environment';
 import LoadAnalytics from '@/components/LoadAnalytics';
@@ -16,6 +16,7 @@ interface LoadPoint {
     id: string;
     position: [number, number, number];
     weight: number;
+    type?: 'manual' | 'vehicle';
 }
 
 interface Vehicle {
@@ -100,6 +101,11 @@ const BridgeSimulator = () => {
     const [vehiclesOnBridgeCount, setVehiclesOnBridgeCount] = useState(0);
     const [vehiclesOnBridge, setVehiclesOnBridge] = useState<Vehicle[]>([]);
     const [dynamicLoad, setDynamicLoad] = useState(0);
+    // Editor-style layout state (resizable panels)
+    const [leftWidth, setLeftWidth] = useState<number>(320);
+    const [terminalHeight, setTerminalHeight] = useState<number>(180);
+    const isDraggingLeftRef = useRef(false);
+    const isDraggingBottomRef = useRef(false);
 
     // Calculate dynamic vehicle loads in real-time
     const calculateDynamicLoad = useCallback(() => {
@@ -134,7 +140,8 @@ const BridgeSimulator = () => {
             .map(v => ({
                 id: `vehicle-${v.id}`,
                 position: v.position,
-                weight: v.weight
+                weight: v.weight,
+                type: 'vehicle' as const // Mark as vehicle load
             }));
 
         const allLoadPoints = [...loadPoints, ...vehicleLoadPoints];
@@ -156,6 +163,35 @@ const BridgeSimulator = () => {
         const interval = setInterval(updateAnalytics, 100);
         return () => clearInterval(interval);
     }, [calculateDynamicLoad, calculateTotalDamageState]);
+
+    // Resize handlers for left sidebar and bottom terminal
+    useEffect(() => {
+        const onMouseMove = (e: MouseEvent) => {
+            if (isDraggingLeftRef.current) {
+                // calculate new left width relative to viewport
+                const newWidth = Math.max(200, Math.min(window.innerWidth - 200, e.clientX));
+                setLeftWidth(newWidth);
+            }
+            if (isDraggingBottomRef.current) {
+                // calculate new terminal height from bottom edge
+                const newHeight = Math.max(80, Math.min(window.innerHeight - 160, window.innerHeight - e.clientY));
+                setTerminalHeight(newHeight);
+            }
+        };
+
+        const onMouseUp = () => {
+            isDraggingLeftRef.current = false;
+            isDraggingBottomRef.current = false;
+            document.body.style.userSelect = '';
+        };
+
+        window.addEventListener('mousemove', onMouseMove);
+        window.addEventListener('mouseup', onMouseUp);
+        return () => {
+            window.removeEventListener('mousemove', onMouseMove);
+            window.removeEventListener('mouseup', onMouseUp);
+        };
+    }, []);
 
     // Initialize vehicles
     React.useEffect(() => {
@@ -206,41 +242,78 @@ const BridgeSimulator = () => {
 
     // Main render
     return (
-        <div className="min-h-screen bg-background">
-            {/* Header */}
-            <header className="border-b border-border bg-card/50 backdrop-blur-sm">
-                <div className="container mx-auto px-4 py-4">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <h1 className="text-2xl font-bold engineering-title">
-                                3D Bridge Load Simulator
-                            </h1>
-                            <p className="text-muted-foreground">
-                                Interactive structural analysis and load testing platform
-                            </p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <Button
-                                variant={showAnalytics ? "engineering" : "outline"}
-                                size="sm"
-                                onClick={() => setShowAnalytics(!showAnalytics)}
-                            >
-                                Analytics
-                            </Button>
-                        </div>
+        <div className="min-h-screen bg-background text-sm">
+            {/* Top toolbar (editor-like) */}
+            <header className="border-b border-border bg-card/60 backdrop-blur-sm">
+                <div className="w-full px-3 py-2 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                        <div className="px-3 py-1 rounded bg-gradient-to-br from-slate-700 to-slate-800 text-white font-semibold">Bridge Studio</div>
+                        <div className="text-muted-foreground">3D Bridge Load Simulator</div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <button className="px-2 py-1 rounded bg-transparent hover:bg-slate-700">File</button>
+                        <button className="px-2 py-1 rounded bg-transparent hover:bg-slate-700">Edit</button>
+                        <button className="px-2 py-1 rounded bg-transparent hover:bg-slate-700">View</button>
+                        <button className="px-2 py-1 rounded bg-transparent hover:bg-slate-700">Help</button>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <Button variant={showAnalytics ? "engineering" : "outline"} size="sm" onClick={() => setShowAnalytics(!showAnalytics)}>Analytics</Button>
                     </div>
                 </div>
             </header>
 
-            {/* Main Content */}
-            <div className="container mx-auto px-4 py-6">
-                <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 h-[calc(100vh-8rem)]">
-                    {/* 3D Simulator */}
-                    <div className="lg:col-span-3 relative">
+            <div className="w-full h-[calc(100vh-3.25rem)] px-3 py-3 flex flex-col">
+                <div className="flex-1 flex overflow-hidden bg-transparent rounded">
+                    {/* Left analytics sidebar (resizable) */}
+                    {showAnalytics && (
+                        <aside style={{ width: leftWidth }} className="flex-shrink-0 flex flex-col overflow-hidden">
+                            <div className="h-full overflow-auto p-2">
+                                <div className="bg-card/90 backdrop-blur-sm p-3 rounded-lg shadow-panel border border-border h-full">
+                                    <LoadAnalytics
+                                        bridgeType={bridgeType}
+                                        loadPoints={loadPoints}
+                                        damageState={realTimeDamageState || damageState}
+                                        vehiclesOnBridge={vehiclesOnBridge}
+                                        dynamicLoad={dynamicLoad}
+                                    />
+                                </div>
+                                <Card className="mt-3 bg-card/90 backdrop-blur-sm shadow-panel border-border">
+                                    <CardHeader>
+                                        <CardTitle className="text-lg engineering-title">Learning Objectives</CardTitle>
+                                        <CardDescription>Understand structural engineering concepts</CardDescription>
+                                    </CardHeader>
+                                    <CardContent className="space-y-3 text-sm">
+                                        <div className="space-y-2">
+                                            <h4 className="font-semibold">Load Distribution</h4>
+                                            <p className="text-muted-foreground">
+                                                Observe how different bridge types handle loads through various structural mechanisms.
+                                            </p>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <h4 className="font-semibold">Stress Visualization</h4>
+                                            <p className="text-muted-foreground">
+                                                Color coding shows stress levels: green (safe) → yellow (warning) → red (critical).
+                                            </p>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            </div>
+                            {/* Vertical resizer */}
+                            <div
+                                onMouseDown={() => { isDraggingLeftRef.current = true; document.body.style.userSelect = 'none'; }}
+                                className="w-1 cursor-col-resize hover:bg-border bg-transparent"
+                                style={{ alignSelf: 'stretch' }}
+                                aria-hidden
+                            />
+                        </aside>
+                    )}
+
+                    {/* Main 3D canvas area */}
+                    <main className="flex-1 relative bg-transparent flex flex-col">
                         <div className="w-full h-full">
                             <Canvas
                                 camera={{ position: [25, 18, 25], fov: 60 }}
-                                className="scene-container"
+                                className="scene-container h-full w-full"
                                 shadows
                             >
                                 <ambientLight intensity={0.6} />
@@ -264,20 +337,20 @@ const BridgeSimulator = () => {
                                         bridgeType={bridgeType}
                                         damageState={damageState}
                                         allVehicles={vehiclesRef}
+                                        isVisible={loadPoints.length === 0} // Hide moving vehicles when loads are present
                                     />
                                 ))}
-                                {/* Bridge rendering */}
                                 {(bridgeType === 'truss' || bridgeType === 'arch') && (
                                     <>
                                         {bridgeType === 'truss' ? (
                                             <TrussBridge loadPoints={loadPoints} damageState={damageState} material={trussMaterial} />
                                         ) : (
-                                            <ArchBridge loadPoints={loadPoints} damageState={damageState} material={archMaterial} />
+                                            <ArchBridge loadPoints={loadPoints} damageState={damageState} material={archMaterial} onAddLoad={addLoad} />
                                         )}
                                         {loadPoints.map((load) => (
                                             <LoadPointVis key={load.id} load={load} />
                                         ))}
-                                        <ClickHandler onAddLoad={addLoad} />
+                                        <ClickHandler onAddLoad={addLoad} bridgeType={bridgeType} />
                                     </>
                                 )}
                                 <OrbitControls
@@ -290,7 +363,8 @@ const BridgeSimulator = () => {
                                     maxDistance={30}
                                 />
                             </Canvas>
-                            {/* Simulation Controls */}
+
+                            {/* Simulation Controls (kept as overlays in the 3D area) */}
                             <div className="absolute top-4 left-4 space-y-4">
                                 <div className="bg-card/90 backdrop-blur-sm p-4 rounded-lg shadow-panel border border-border">
                                     <h3 className="font-semibold mb-3">Bridge Type</h3>
@@ -374,7 +448,8 @@ const BridgeSimulator = () => {
                                     Clear All Loads
                                 </button>
                             </div>
-                            {/* Enhanced Status Display - Real-time damage state */}
+
+                            {/* Status overlay in 3D area */}
                             <div className="absolute bottom-4 right-4 bg-card/90 backdrop-blur-sm p-4 rounded-lg shadow-panel border border-border max-w-sm">
                                 <div className="flex items-center justify-between mb-2">
                                     <h3 className="font-semibold">Bridge Status</h3>
@@ -402,12 +477,7 @@ const BridgeSimulator = () => {
                                     <div>Active Cracks: {(realTimeDamageState || damageState).cracks.length}</div>
                                     {currentDynamicLoad > 0 && (
                                         <div className="pt-2 border-t border-border space-y-1">
-                                            <div className="text-orange-500 font-semibold text-xs">
-                                                🚗 VEHICLES ON BRIDGE: {vehiclesOnBridgeCount}
-                                            </div>
-                                            <div className="text-orange-500 text-xs">
-                                                Dynamic Load: +{currentDynamicLoad}kg
-                                            </div>
+                                            {/* dynamic load details could go here */}
                                         </div>
                                     )}
                                     {(realTimeDamageState || damageState).overallIntegrity < 0.5 && (
@@ -426,47 +496,36 @@ const BridgeSimulator = () => {
                                 </div>
                             </div>
                         </div>
+                    </main>
+                </div>
+
+                {/* Bottom terminal area (resizable) */}
+                {/* Horizontal resizer */}
+                <div
+                    onMouseDown={() => { isDraggingBottomRef.current = true; document.body.style.userSelect = 'none'; }}
+                    className="h-1 cursor-row-resize bg-border rounded-t"
+                    aria-hidden
+                />
+                <div style={{ height: terminalHeight }} className="mt-2 bg-[#0b1220] text-xs text-green-300 font-mono rounded-b-lg border border-border p-3 overflow-auto">
+                    <div className="flex items-center justify-between">
+                        <div className="font-semibold">Terminal</div>
+                        <div className="text-[11px] text-muted-foreground">Logs & Diagnostics</div>
                     </div>
-                    {/* Analytics Panel */}
-                    {showAnalytics && (
-                        <div className="lg:col-span-1 space-y-4 overflow-y-auto">
-                            <LoadAnalytics
-                                bridgeType={bridgeType}
-                                loadPoints={loadPoints}
-                                damageState={realTimeDamageState || damageState}
-                                vehiclesOnBridge={vehiclesOnBridge}
-                                dynamicLoad={dynamicLoad}
-                            />
-                            <Card className="bg-card/90 backdrop-blur-sm shadow-panel border-border">
-                                <CardHeader>
-                                    <CardTitle className="text-lg engineering-title">Learning Objectives</CardTitle>
-                                    <CardDescription>Understand structural engineering concepts</CardDescription>
-                                </CardHeader>
-                                <CardContent className="space-y-3 text-sm">
-                                    <div className="space-y-2">
-                                        <h4 className="font-semibold">Load Distribution</h4>
-                                        <p className="text-muted-foreground">
-                                            Observe how different bridge types handle loads through various structural mechanisms.
-                                        </p>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <h4 className="font-semibold">Stress Visualization</h4>
-                                        <p className="text-muted-foreground">
-                                            Color coding shows stress levels: green (safe) → yellow (warning) → red (critical).
-                                        </p>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <h4 className="font-semibold">Safety Factors</h4>
-                                        <p className="text-muted-foreground">
-                                            Real bridges include safety margins. Always design for loads well below maximum capacity.
-                                        </p>
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        </div>
-                    )}
+                    <div className="mt-2 text-[12px]">
+                        {/* Placeholder logs - in future hook up real logs or console output */}
+                        <div>Initializing renderer...</div>
+                        <div>Loading assets...</div>
+                        <div>Vehicles loaded: {vehiclesRef.current.length}</div>
+                        <div>Real-time damage monitoring active</div>
+                    </div>
                 </div>
             </div>
+
+            {/* Stress Analysis Panel - shows when loads are applied */}
+            <StressAnalysisPanel
+                loadPoints={loadPoints.filter(load => load.type === 'manual' || (!load.type && !load.id.startsWith('vehicle-')))}
+                isVisible={loadPoints.some(load => load.type === 'manual' || (!load.type && !load.id.startsWith('vehicle-')))}
+            />
         </div>
     );
 };

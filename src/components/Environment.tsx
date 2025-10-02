@@ -98,11 +98,7 @@ const Environment: React.FC = React.memo(() => {
                     <meshStandardMaterial color="#3a6b4a" />
                 </mesh>
 
-                {/* Connecting slope to bridge level */}
-                <mesh position={[-16.5, bridgeHeight - 0.1, 0]} rotation={[-Math.PI / 2, 0.08, 0]} receiveShadow>
-                    <planeGeometry args={[5, 50]} />
-                    <meshStandardMaterial color="#228B22" />
-                </mesh>
+                {/* Connecting slope to bridge level (removed bright green patch) */}
             </group>
 
             {/* Large land mass on right side - realistic terrain */}
@@ -119,11 +115,7 @@ const Environment: React.FC = React.memo(() => {
                     <meshStandardMaterial color="#3a6b4a" />
                 </mesh>
 
-                {/* Connecting slope to bridge level */}
-                <mesh position={[16.5, bridgeHeight - 0.1, 0]} rotation={[-Math.PI / 2, -0.08, 0]} receiveShadow>
-                    <planeGeometry args={[5, 50]} />
-                    <meshStandardMaterial color="#228B22" />
-                </mesh>
+                {/* Connecting slope to bridge level (removed bright green patch) */}
             </group>
 
             {/* Road connecting to left bridge end - exact alignment */}

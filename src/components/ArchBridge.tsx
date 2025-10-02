@@ -4,10 +4,138 @@ import { Line } from '@react-three/drei';
 import DamageVisualization from './DamageVisualization';
 import type { LoadPoint, DamageState } from '../utils/BridgeUtils';
 
-const ArchBridge: React.FC<{ loadPoints: LoadPoint[]; damageState: DamageState; material?: 'wood' | 'steel' | 'concrete' }> = ({ loadPoints, damageState, material = 'wood' }) => {
+const ArchBridge: React.FC<{
+    loadPoints: LoadPoint[];
+    damageState: DamageState;
+    material?: 'wood' | 'steel' | 'concrete';
+    onAddLoad?: (position: [number, number, number]) => void;
+}> = ({ loadPoints, damageState, material = 'wood', onAddLoad }) => {
     const bridgeRef = useRef<THREE.Group>(null);
 
-    // Realistic arch stress color
+    // Calculate bridge surface height for a given X position
+    const getBridgeSurfaceHeight = (x: number) => {
+        const totalBridgeLength = 28;
+        const bridgeBaseY = 2.2;
+        const deckCurveHeight = 1.5;
+
+        if (x >= -14 && x <= 14) {
+            // On bridge - arch bridge has curved surface
+            return bridgeBaseY + deckCurveHeight * (1 - Math.pow(x / (totalBridgeLength / 2), 2)) + 0.18;
+        }
+        return bridgeBaseY + 0.18; // Default bridge height
+    };
+
+    // Click handler for railings - maps railing click to bridge surface
+    const handleRailingClick = (event: any) => {
+        if (!onAddLoad) return;
+
+        const railingX = event.object.position.x;
+        const surfaceY = getBridgeSurfaceHeight(railingX);
+        const surfaceZ = 0; // Center of bridge
+
+        // Place load on bridge surface at the same X position as the clicked railing
+        onAddLoad([railingX, surfaceY, surfaceZ]);
+    };
+
+    // Professional Heat Map Color System - Like MIDAS Civil
+    const getHeatMapColor = (position: [number, number, number], elementType: 'member' | 'joint' | 'deck' = 'member') => {
+        // If no loads applied, return neutral blue color
+        if (loadPoints.length === 0) {
+            return '#1976D2'; // Professional blue - no stress state
+        }
+
+        let totalStress = 0;
+        const maxDistance = 28 / 2; // arch span / 2
+
+        // Calculate stress from all loads
+        loadPoints.forEach(load => {
+            const distance = Math.sqrt(
+                Math.pow(position[0] - load.position[0], 2) +
+                Math.pow(position[2] - load.position[2], 2)
+            );
+
+            // Different stress propagation for different elements
+            let stressInfluence = 0;
+            switch (elementType) {
+                case 'deck':
+                    // Deck experiences direct load transfer
+                    stressInfluence = load.weight / (1 + distance * 0.3);
+                    break;
+                case 'member':
+                    // Arch members distribute stress through structure
+                    stressInfluence = load.weight / (1 + distance * 0.8);
+                    break;
+                case 'joint':
+                    // Joints concentrate stress
+                    stressInfluence = load.weight / (1 + distance * 0.5);
+                    break;
+            }
+
+            totalStress += stressInfluence;
+        });
+
+        // Add position-based stress (arch crown has higher stress)
+        const archCrownFactor = 1 + (1 - Math.abs(position[0]) / maxDistance) * 0.4;
+        totalStress *= archCrownFactor;
+
+        // Damage amplifies stress visualization
+        const damageMultiplier = 1 + (1 - damageState.overallIntegrity) * 2;
+        totalStress *= damageMultiplier;
+
+        // Professional thermal color scale - Blue to Red
+        const normalizedStress = Math.min(totalStress / 400, 1); // Normalize to 0-1
+
+        if (normalizedStress < 0.1) return '#0D47A1';      // Deep Blue - Very Low
+        if (normalizedStress < 0.2) return '#1976D2';      // Blue - Low  
+        if (normalizedStress < 0.3) return '#42A5F5';      // Light Blue
+        if (normalizedStress < 0.4) return '#81C784';      // Light Green
+        if (normalizedStress < 0.5) return '#66BB6A';      // Green - Safe
+        if (normalizedStress < 0.6) return '#FFEB3B';      // Yellow - Caution
+        if (normalizedStress < 0.7) return '#FFA726';      // Orange - Warning
+        if (normalizedStress < 0.8) return '#FF7043';      // Orange-Red
+        if (normalizedStress < 0.9) return '#F44336';      // Red - Critical
+        return '#D32F2F';                                  // Dark Red - Extreme
+    };
+
+    // Get material properties with heat map override
+    const getHeatMapMaterial = (position: [number, number, number], elementType: 'member' | 'joint' | 'deck' = 'member') => {
+        // Only apply heat map colors for manual loads (both wood and steel)
+        const manualLoads = loadPoints.filter(load => load.type === 'manual' || (!load.type && !load.id.startsWith('vehicle-')));
+
+        if (manualLoads.length > 0) {
+            const heatColor = getHeatMapColor(position, elementType);
+            return {
+                color: heatColor,
+                metalness: 0.3,     // Slight metallic look for realism
+                roughness: 0.6,     // Not too shiny
+                emissive: heatColor,
+                emissiveIntensity: 0.1  // Slight glow for heat effect
+            };
+        }
+
+        // Default materials when no manual loads
+        if (material === 'wood') {
+            return {
+                color: '#8B5A2B',   // Brown wood color
+                metalness: 0.0,
+                roughness: 0.9
+            };
+        } else if (material === 'concrete') {
+            return {
+                color: '#f5f5f5',   // Concrete white
+                metalness: 0.1,
+                roughness: 0.8
+            };
+        }
+
+        return {
+            color: '#e9ecef',   // Steel silver
+            metalness: 0.8,
+            roughness: 0.2
+        };
+    };
+
+    // Realistic arch stress color (legacy - now using heat map)
     const getStressColor = (position: [number, number, number]) => {
         let maxStress = 0;
         loadPoints.forEach(load => {
@@ -148,32 +276,38 @@ const ArchBridge: React.FC<{ loadPoints: LoadPoint[]; damageState: DamageState; 
             {/* Arches: wooden lines or steel multi-ribbed arches with connectors/bracing */}
             {material === 'wood' ? (
                 <>
-                    <Line points={archPointsLeft} color="#c97a3d" lineWidth={8} />
-                    <Line points={archPointsRight} color="#c97a3d" lineWidth={8} />
+                    <Line points={archPointsLeft} color={(() => {
+                        const manualLoads = loadPoints.filter(load => load.type === 'manual' || (!load.type && !load.id.startsWith('vehicle-')));
+                        return manualLoads.length > 0 ? getHeatMapColor([-archSpan / 4, archBaseY + archHeight / 2, -archOffset], 'member') : "#c97a3d";
+                    })()} lineWidth={8} />
+                    <Line points={archPointsRight} color={(() => {
+                        const manualLoads = loadPoints.filter(load => load.type === 'manual' || (!load.type && !load.id.startsWith('vehicle-')));
+                        return manualLoads.length > 0 ? getHeatMapColor([archSpan / 4, archBaseY + archHeight / 2, archOffset], 'member') : "#c97a3d";
+                    })()} lineWidth={8} />
                 </>
             ) : (
                 <>
                     {/* Multiple ribs per side to give the arch depth and weight */}
                     {ribGeomsLeft.map((g, ri) => (
                         <mesh key={`left-rib-${ri}`} geometry={g}>
-                            <primitive object={archMeshMaterial} attach="material" />
+                            <meshStandardMaterial {...getHeatMapMaterial([-archSpan / 4, archBaseY + archHeight / 2, -archOffset - ri * 0.12], 'member')} />
                         </mesh>
                     ))}
                     {ribGeomsRight.map((g, ri) => (
                         <mesh key={`right-rib-${ri}`} geometry={g}>
-                            <primitive object={archMeshMaterial} attach="material" />
+                            <meshStandardMaterial {...getHeatMapMaterial([archSpan / 4, archBaseY + archHeight / 2, archOffset + ri * 0.12], 'member')} />
                         </mesh>
                     ))}
 
                     {/* For concrete, draw an additional slightly larger shell so the arch visually reads as solid white concrete */}
                     {material === 'concrete' && concreteShellLeft && (
                         <mesh geometry={concreteShellLeft}>
-                            <primitive object={archMeshMaterial} attach="material" />
+                            <meshStandardMaterial {...getHeatMapMaterial([-archSpan / 4, archBaseY + archHeight / 2, -archOffset], 'member')} />
                         </mesh>
                     )}
                     {material === 'concrete' && concreteShellRight && (
                         <mesh geometry={concreteShellRight}>
-                            <primitive object={archMeshMaterial} attach="material" />
+                            <meshStandardMaterial {...getHeatMapMaterial([archSpan / 4, archBaseY + archHeight / 2, archOffset], 'member')} />
                         </mesh>
                     )}
 
@@ -221,7 +355,7 @@ const ArchBridge: React.FC<{ loadPoints: LoadPoint[]; damageState: DamageState; 
                 return (
                     <mesh key={i} position={[(left[0] + right[0]) / 2, (left[1] + right[1]) / 2, 0]}>
                         <boxGeometry args={[material === 'concrete' ? 0.28 : 0.08, material === 'concrete' ? 0.28 : 0.08, deckWidth]} />
-                        <meshStandardMaterial color={material === 'concrete' ? concreteWhite : (material === 'steel' ? '#cfcfcf' : '#a0522d')} metalness={material === 'steel' ? 0.9 : 0} roughness={material === 'concrete' ? 0.78 : (material === 'steel' ? 0.2 : 0.8)} />
+                        <meshStandardMaterial {...getHeatMapMaterial([(left[0] + right[0]) / 2, (left[1] + right[1]) / 2, 0], 'member')} />
                     </mesh>
                 );
             })}
@@ -263,27 +397,21 @@ const ArchBridge: React.FC<{ loadPoints: LoadPoint[]; damageState: DamageState; 
                             {/* Main wooden surface with planks texture */}
                             <mesh key="deck-base" geometry={geometry}>
                                 <meshStandardMaterial
-                                    color={material === 'concrete' ? concreteWhite : (material === 'steel' ? '#9e9e9e' : '#995D27')}
-                                    roughness={material === 'concrete' ? 0.8 : (material === 'steel' ? 0.85 : 0.9)}
-                                    metalness={material === 'steel' ? 0.0 : 0.0}
+                                    {...getHeatMapMaterial([0, deckY, 0], 'deck')}
                                 />
                             </mesh>
 
                             {/* Bottom surface for thickness */}
                             <mesh key="deck-bottom" geometry={geometry} position={[0, -0.4, 0]}>
                                 <meshStandardMaterial
-                                    color={material === 'concrete' ? concreteLight : (material === 'steel' ? steelSilver : '#995D27')}
-                                    roughness={material === 'concrete' ? 0.78 : (material === 'steel' ? 0.16 : 0.9)}
-                                    metalness={material === 'steel' ? 0.95 : 0}
+                                    {...getHeatMapMaterial([0, deckY - 0.4, 0], 'deck')}
                                 />
                             </mesh>
 
                             {/* Planks overlay for texture */}
                             <mesh key="planks-texture" geometry={geometry} position={[0, 0.01, 0]}>
                                 <meshStandardMaterial
-                                    color={material === 'concrete' ? concreteWhite : (material === 'steel' ? '#9e9e9e' : '#995D27')}
-                                    roughness={material === 'concrete' ? 0.8 : (material === 'steel' ? 0.75 : 0.0)}
-                                    metalness={material === 'steel' ? 0.6 : 0}
+                                    {...getHeatMapMaterial([0, deckY + 0.01, 0], 'deck')}
                                 />
                             </mesh>
                         </>
@@ -362,10 +490,14 @@ const ArchBridge: React.FC<{ loadPoints: LoadPoint[]; damageState: DamageState; 
                                 const postMetal = material === 'steel' || isConcreteRail ? 0.95 : 0;
                                 const postRough = material === 'steel' || isConcreteRail ? 0.18 : 0.8;
                                 return (
-                                    <mesh key={`post-left-${i}`} position={[pos[0], pos[1] + railHeight / 2, -deckWidth / 2 - 0.09]}>
+                                    <mesh
+                                        key={`post-left-${i}`}
+                                        position={[pos[0], pos[1] + railHeight / 2, -deckWidth / 2 - 0.09]}
+                                        onClick={handleRailingClick}
+                                    >
                                         {/* Heavier square posts for steel and concrete-anchored steel rails */}
                                         <boxGeometry args={postSize as [number, number, number]} />
-                                        <meshStandardMaterial color={postColor} metalness={postMetal} roughness={postRough} />
+                                        <meshStandardMaterial {...getHeatMapMaterial([pos[0], pos[1] + railHeight / 2, -deckWidth / 2 - 0.09], 'member')} />
                                     </mesh>
                                 );
                             }
@@ -381,9 +513,13 @@ const ArchBridge: React.FC<{ loadPoints: LoadPoint[]; damageState: DamageState; 
                                 const postMetal = material === 'steel' || isConcreteRail ? 0.95 : 0;
                                 const postRough = material === 'steel' || isConcreteRail ? 0.18 : 0.8;
                                 return (
-                                    <mesh key={`post-right-${i}`} position={[pos[0], pos[1] + railHeight / 2, deckWidth / 2 + 0.09]}>
+                                    <mesh
+                                        key={`post-right-${i}`}
+                                        position={[pos[0], pos[1] + railHeight / 2, deckWidth / 2 + 0.09]}
+                                        onClick={handleRailingClick}
+                                    >
                                         <boxGeometry args={postSize as [number, number, number]} />
-                                        <meshStandardMaterial color={postColor} metalness={postMetal} roughness={postRough} />
+                                        <meshStandardMaterial {...getHeatMapMaterial([pos[0], pos[1] + railHeight / 2, deckWidth / 2 + 0.09], 'member')} />
                                     </mesh>
                                 );
                             }
@@ -399,11 +535,11 @@ const ArchBridge: React.FC<{ loadPoints: LoadPoint[]; damageState: DamageState; 
                                 <React.Fragment key={`rivets-${i}`}>
                                     <mesh position={[pos[0], pos[1] + railHeight - 0.18, -deckWidth / 2 - 0.09 - 0.03]}>
                                         <sphereGeometry args={[isConcreteRail ? 0.015 : 0.02, 6, 6]} />
-                                        <meshStandardMaterial color={isConcreteRail ? steelAccent : steelBright} metalness={isConcreteRail ? 0.9 : 1} roughness={isConcreteRail ? 0.22 : 0.12} />
+                                        <meshStandardMaterial {...getHeatMapMaterial([pos[0], pos[1] + railHeight - 0.18, -deckWidth / 2 - 0.09 - 0.03], 'joint')} />
                                     </mesh>
                                     <mesh position={[pos[0], pos[1] + railHeight - 0.18, deckWidth / 2 + 0.09 + 0.03]}>
                                         <sphereGeometry args={[isConcreteRail ? 0.015 : 0.02, 6, 6]} />
-                                        <meshStandardMaterial color={isConcreteRail ? steelAccent : steelBright} metalness={isConcreteRail ? 0.9 : 1} roughness={isConcreteRail ? 0.22 : 0.12} />
+                                        <meshStandardMaterial {...getHeatMapMaterial([pos[0], pos[1] + railHeight - 0.18, deckWidth / 2 + 0.09 + 0.03], 'joint')} />
                                     </mesh>
                                 </React.Fragment>
                             );
@@ -453,17 +589,19 @@ const ArchBridge: React.FC<{ loadPoints: LoadPoint[]; damageState: DamageState; 
                                                             key={`rail-left-${level}-${i}`}
                                                             position={[midX, midY + 0.25 + level * 0.2, -deckWidth / 2 + 0.05]}
                                                             rotation={[0, 0, angle]}
+                                                            onClick={handleRailingClick}
                                                         >
                                                             <boxGeometry args={[length, level === 0 ? (material === 'steel' || isConcreteRail ? 0.14 : 0.08) : (material === 'steel' || isConcreteRail ? 0.06 : 0.04), level === 0 ? (material === 'steel' || isConcreteRail ? 0.14 : 0.08) : (material === 'steel' || isConcreteRail ? 0.06 : 0.04)]} />
-                                                            <meshStandardMaterial color={material === 'steel' ? (level === 0 ? steelSilver : '#d1d1d1') : (isConcreteRail ? (level === 0 ? steelDark : steelAccent) : (level === 0 ? "#8B4513" : "#a0522d"))} metalness={material === 'steel' || isConcreteRail ? 0.95 : 0} roughness={material === 'steel' || isConcreteRail ? 0.18 : 0.8} />
+                                                            <meshStandardMaterial {...getHeatMapMaterial([midX, midY + 0.25 + level * 0.2, -deckWidth / 2 + 0.05], 'member')} />
                                                         </mesh>
                                                         <mesh
                                                             key={`rail-right-${level}-${i}`}
                                                             position={[midX, midY + (level === 0 ? 0.15 : (level === 3 ? 0.7 : 0.25 + level * 0.2)), deckWidth / 2 - 0.05]}
                                                             rotation={[0, 0, angle]}
+                                                            onClick={handleRailingClick}
                                                         >
                                                             <boxGeometry args={[length, level === 0 ? (material === 'steel' || isConcreteRail ? 0.14 : 0.08) : (material === 'steel' || isConcreteRail ? 0.06 : 0.04), level === 0 ? (material === 'steel' || isConcreteRail ? 0.14 : 0.08) : (material === 'steel' || isConcreteRail ? 0.06 : 0.04)]} />
-                                                            <meshStandardMaterial color={material === 'steel' ? (level === 0 ? steelSilver : '#d1d1d1') : (isConcreteRail ? (level === 0 ? steelDark : steelAccent) : (level === 0 ? "#8B4513" : "#a0522d"))} metalness={material === 'steel' || isConcreteRail ? 0.95 : 0} roughness={material === 'steel' || isConcreteRail ? 0.18 : 0.8} />
+                                                            <meshStandardMaterial {...getHeatMapMaterial([midX, midY + (level === 0 ? 0.15 : (level === 3 ? 0.7 : 0.25 + level * 0.2)), deckWidth / 2 - 0.05], 'member')} />
                                                         </mesh>
                                                     </React.Fragment>
                                                 );
