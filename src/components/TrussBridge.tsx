@@ -5,8 +5,52 @@ import type { LoadPoint, DamageState } from '../utils/BridgeUtils';
 
 type TrussMaterial = 'steel' | 'wood';
 
-const TrussBridge: React.FC<{ loadPoints: LoadPoint[]; damageState: DamageState; material?: TrussMaterial }> = ({ loadPoints, damageState, material = 'steel' }) => {
+interface TrussBridgeProps {
+    loadPoints: LoadPoint[];
+    damageState: DamageState;
+    material?: TrussMaterial;
+    foundationIntegrity?: number | null;
+    foundationLoads?: number[] | null;
+    foundationSupports?: any[] | null;
+    isCollapse?: boolean;
+}
+
+const TrussBridge: React.FC<TrussBridgeProps> = ({
+    loadPoints,
+    damageState,
+    material = 'steel',
+    foundationIntegrity,
+    foundationLoads,
+    foundationSupports,
+    isCollapse
+}) => {
     const bridgeRef = useRef<THREE.Group>(null);
+
+
+    // Warren truss dimensions - made more realistic
+    const bridgeLength = 28;
+    const bridgeHeight = 4.2; // Taller for more realistic proportions
+    const deckHeight = 2.2;
+    const trussSpacing = 3.5; // Distance between truss panels
+    const numPanels = 8; // Number of Warren truss panels
+    const trussWidth = 2.0; // Wider distance between left and right trusses
+
+
+    // --- Realistic Foundation Physics ---
+    // Use foundation analytics from props for full synchronization
+    const collapseActive = !!isCollapse;
+    const effectiveIntegrity = collapseActive ? 0 : Math.min(damageState.overallIntegrity, foundationIntegrity ?? 1);
+
+    // Expose foundation data for analytics
+    React.useImperativeHandle(
+        (bridgeRef as any),
+        () => ({
+            foundationIntegrity,
+            foundationLoads,
+            foundationSupports
+        }),
+        [foundationIntegrity, foundationLoads, foundationSupports]
+    );
 
     // Professional Heat Map Color System - Like MIDAS Civil
     const getHeatMapColor = (position: [number, number, number], elementType: 'member' | 'joint' | 'deck' = 'member') => {
@@ -52,7 +96,7 @@ const TrussBridge: React.FC<{ loadPoints: LoadPoint[]; damageState: DamageState;
         totalStress *= midSpanFactor;
 
         // Damage amplifies stress visualization
-        const damageMultiplier = 1 + (1 - damageState.overallIntegrity) * 2;
+        const damageMultiplier = 1 + (1 - effectiveIntegrity) * 2;
         totalStress *= damageMultiplier;
 
         // Professional thermal color scale - Blue to Red
@@ -147,17 +191,12 @@ const TrussBridge: React.FC<{ loadPoints: LoadPoint[]; damageState: DamageState;
         return 0;
     };
 
-    // Collapse: break apart when integrity is very low
-    const collapsePosition: [number, number, number] = damageState.overallIntegrity < 0.1 ? [0, -2, 0] : [0, 0, 0];
-    const collapseRotation: [number, number, number] = damageState.overallIntegrity < 0.1 ? [0, 0, 0.3] : [0, 0, 0];
+    // --- COLLAPSE/DEBRIS LOGIC RESTORED & SYNCHRONIZED ---
+    // Collapse animation and debris when collapseActive is true
+    const collapsePosition: [number, number, number] = collapseActive ? [0, -3, 0] : [0, 0, 0];
+    const collapseRotation: [number, number, number] = collapseActive ? [0, 0, 0.5] : [0, 0, 0];
 
     // Warren truss dimensions - made more realistic
-    const bridgeLength = 28;
-    const bridgeHeight = 4.2; // Taller for more realistic proportions
-    const deckHeight = 2.2;
-    const trussSpacing = 3.5; // Distance between truss panels
-    const numPanels = 8; // Number of Warren truss panels
-    const trussWidth = 2.0; // Wider distance between left and right trusses
 
     // Procedural canvas wood texture used for roof and deck in wood mode
     const woodTexture = useMemo(() => {
@@ -876,24 +915,24 @@ const TrussBridge: React.FC<{ loadPoints: LoadPoint[]; damageState: DamageState;
                 </>
             )}
 
-            {/* Collapse debris if failed */}
-            {damageState.overallIntegrity < 0.1 && (
-                <group position={[0, -2.5, 0]} rotation={[0, 0, 0.3]}>
+            {/* COLLAPSE/DEBRIS VISUALIZATION RESTORED & SYNCHRONIZED */}
+            {collapseActive && (
+                <group position={[0, -3, 0]} rotation={[0, 0, 0.5]}>
                     <mesh>
-                        <boxGeometry args={[bridgeLength, 0.5, 2]} />
+                        <boxGeometry args={[bridgeLength, 0.7, 2]} />
                         <meshStandardMaterial color="#b71c1c" />
                     </mesh>
                     {/* Scattered debris */}
-                    {Array.from({ length: 8 }, (_, i) => (
+                    {Array.from({ length: 16 }, (_, i) => (
                         <mesh key={`debris-${i}`} position={[
                             (Math.random() - 0.5) * bridgeLength,
-                            Math.random() * 2,
+                            Math.random() * 3,
                             (Math.random() - 0.5) * 4
                         ]}>
                             <boxGeometry args={[
-                                0.5 + Math.random() * 1.5,
-                                0.3 + Math.random() * 0.7,
-                                0.3 + Math.random() * 0.7
+                                0.5 + Math.random() * 2.5,
+                                0.3 + Math.random() * 1.2,
+                                0.3 + Math.random() * 1.2
                             ]} />
                             <meshStandardMaterial color="#d32f2f" />
                         </mesh>
@@ -903,8 +942,8 @@ const TrussBridge: React.FC<{ loadPoints: LoadPoint[]; damageState: DamageState;
 
             <DamageVisualization
                 cracks={damageState.cracks}
-                integrity={damageState.overallIntegrity}
-                failureMode={damageState.failureMode}
+                integrity={collapseActive ? 0 : effectiveIntegrity}
+                failureMode={collapseActive ? 'collapse' : damageState.failureMode}
             />
         </group>
     );

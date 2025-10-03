@@ -104,6 +104,7 @@ const BridgeSimulator = () => {
     // Editor-style layout state (resizable panels)
     const [leftWidth, setLeftWidth] = useState<number>(320);
     const [terminalHeight, setTerminalHeight] = useState<number>(180);
+    const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
     const isDraggingLeftRef = useRef(false);
     const isDraggingBottomRef = useRef(false);
 
@@ -217,19 +218,71 @@ const BridgeSimulator = () => {
         vehiclesRef.current = initialVehicles;
     }, []);
 
+    // Foundation analytics state
+    const trussBridgeRef = useRef<any>(null);
+    const [foundationIntegrity, setFoundationIntegrity] = useState<number | null>(null);
+    const [foundationLoads, setFoundationLoads] = useState<number[] | null>(null);
+    const [foundationSupports, setFoundationSupports] = useState<any[] | null>(null);
+
+    // Poll foundation data from TrussBridge
+    useEffect(() => {
+        if (bridgeType === 'truss' && trussBridgeRef.current) {
+            const poll = () => {
+                const { foundationIntegrity, foundationLoads, foundationSupports } = trussBridgeRef.current;
+                setFoundationIntegrity(foundationIntegrity);
+                setFoundationLoads(foundationLoads);
+                setFoundationSupports(foundationSupports);
+            };
+            const interval = setInterval(poll, 200);
+            return () => clearInterval(interval);
+        }
+    }, [bridgeType]);
+
     // Calculate damage state (now includes vehicles for real-time updates)
-    const damageState = useMemo(() => {
+    // For truss bridge, use foundation integrity for collapse logic
+    const baseDamageState = useMemo(() => {
         return calculateDamageState(bridgeType, loadPoints);
     }, [bridgeType, loadPoints]);
+
+    // Override for truss bridge foundation collapse
+    let damageState = baseDamageState;
+    // Only show collapse/failure if total bridge load exceeds maximum capacity
+    const safetyFactor = 1.5;
+    const bridgeCapacities = {
+        truss: { max: 180000, safe: 120000 },
+        arch: { max: 180000, safe: 120000 }
+    };
+    const capacity = bridgeCapacities[bridgeType];
+    const staticWeight = loadPoints.reduce((sum, load) => sum + load.weight, 0);
+    const totalLoad = staticWeight + dynamicLoad;
+    const collapseThreshold = capacity.max * safetyFactor;
+    const isCollapse = totalLoad >= collapseThreshold;
+    if (
+        bridgeType === 'truss' &&
+        foundationIntegrity !== null &&
+        isCollapse
+    ) {
+        damageState = {
+            ...baseDamageState,
+            overallIntegrity: foundationIntegrity,
+            failureMode: 'collapse' as FailureMode,
+            warningLevel: 'failure' as WarningLevel,
+            cracks: baseDamageState.cracks
+        };
+    }
 
     const addLoad = useCallback((position: [number, number, number]) => {
         const newLoad: LoadPoint = {
             id: Date.now().toString(),
             position,
-            weight: currentWeight
+            weight: currentWeight,
+            type: 'manual'
         };
         const newLoadPoints = [...loadPoints, newLoad];
         setLoadPoints(newLoadPoints);
+        // Immediately update analytics and status for manual loads
+        // This ensures the UI reflects the new load and physics instantly
+        // (If analytics logic is in a useEffect, this will trigger it)
     }, [currentWeight, loadPoints]);
 
     const clearLoads = useCallback(() => {
@@ -239,6 +292,10 @@ const BridgeSimulator = () => {
     const handleBridgeTypeChange = useCallback((type: 'truss' | 'arch') => {
         setBridgeType(type);
     }, []);
+
+    const toggleFullscreen = useCallback(() => {
+        setIsFullscreen(!isFullscreen);
+    }, [isFullscreen]);
 
     // Main render
     return (
@@ -258,17 +315,20 @@ const BridgeSimulator = () => {
                     </div>
                     <div className="flex items-center gap-2">
                         <Button variant={showAnalytics ? "engineering" : "outline"} size="sm" onClick={() => setShowAnalytics(!showAnalytics)}>Analytics</Button>
+                        <Button variant={isFullscreen ? "engineering" : "outline"} size="sm" onClick={toggleFullscreen}>
+                            {isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
+                        </Button>
                     </div>
                 </div>
             </header>
 
-            <div className="w-full h-[calc(100vh-3.25rem)] px-3 py-3 flex flex-col">
+            <div className={`w-full h-[calc(100vh-3.25rem)] ${isFullscreen ? 'px-1 py-1' : 'px-3 py-3'} flex flex-col`}>
                 <div className="flex-1 flex overflow-hidden bg-transparent rounded">
                     {/* Left analytics sidebar (resizable) */}
-                    {showAnalytics && (
+                    {showAnalytics && !isFullscreen && (
                         <aside style={{ width: leftWidth }} className="flex-shrink-0 flex flex-col overflow-hidden">
                             <div className="h-full overflow-auto p-2">
-                                <div className="bg-card/90 backdrop-blur-sm p-3 rounded-lg shadow-panel border border-border h-full">
+                                <Card className="bg-card/90 backdrop-blur-sm rounded-lg shadow-panel border border-border mb-3">
                                     <LoadAnalytics
                                         bridgeType={bridgeType}
                                         loadPoints={loadPoints}
@@ -276,7 +336,39 @@ const BridgeSimulator = () => {
                                         vehiclesOnBridge={vehiclesOnBridge}
                                         dynamicLoad={dynamicLoad}
                                     />
-                                </div>
+                                </Card>
+                                {bridgeType === 'truss' && (
+                                    <Card className="bg-card/95 backdrop-blur-sm shadow-panel border-border mb-3">
+                                        <CardHeader className="pb-0">
+                                            <CardTitle className="text-lg text-blue-400 font-semibold">Truss Bridge Specs</CardTitle>
+                                            <CardDescription>Technical specifications and limits</CardDescription>
+                                        </CardHeader>
+                                        <CardContent className="pt-2 pb-3">
+                                            <div className="grid grid-cols-2 gap-x-6 gap-y-2 mb-2 text-sm">
+                                                <div>
+                                                    <span className="font-medium">Length</span>
+                                                    <div className="font-mono text-[15px] text-muted-foreground">65.0 m</div>
+                                                </div>
+                                                <div>
+                                                    <span className="font-medium">Material</span>
+                                                    <div className="font-mono text-[15px] text-muted-foreground">Steel</div>
+                                                </div>
+                                                <div>
+                                                    <span className="font-medium">Max Load</span>
+                                                    <div className="font-mono text-[15px] text-muted-foreground">180 t</div>
+                                                </div>
+                                                <div>
+                                                    <span className="font-medium">Safety Factor</span>
+                                                    <div className="font-mono text-[15px] text-muted-foreground">1.5x</div>
+                                                </div>
+                                            </div>
+                                            <hr className="my-2 border-border" />
+                                            <div className="text-xs text-muted-foreground">
+                                                Truss bridges distribute loads through triangular units, providing excellent strength-to-weight ratio.
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+                                )}
                                 <Card className="mt-3 bg-card/90 backdrop-blur-sm shadow-panel border-border">
                                     <CardHeader>
                                         <CardTitle className="text-lg engineering-title">Learning Objectives</CardTitle>
@@ -295,6 +387,11 @@ const BridgeSimulator = () => {
                                                 Color coding shows stress levels: green (safe) → yellow (warning) → red (critical).
                                             </p>
                                         </div>
+                                        <div className="space-y-2">
+                                            <h4 className="font-semibold">Safety Factors</h4>
+                                            <p className="text-muted-foreground">
+                                                Real bridges include safety margins. Always design for loads well below maximum capacity.                                            </p>
+                                        </div>
                                     </CardContent>
                                 </Card>
                             </div>
@@ -309,8 +406,8 @@ const BridgeSimulator = () => {
                     )}
 
                     {/* Main 3D canvas area */}
-                    <main className="flex-1 relative bg-transparent flex flex-col">
-                        <div className="w-full h-full">
+                    <main className="flex-1 relative bg-transparent flex flex-col overflow-hidden">
+                        <div className="w-full h-full relative">
                             <Canvas
                                 camera={{ position: [25, 18, 25], fov: 60 }}
                                 className="scene-container h-full w-full"
@@ -343,7 +440,15 @@ const BridgeSimulator = () => {
                                 {(bridgeType === 'truss' || bridgeType === 'arch') && (
                                     <>
                                         {bridgeType === 'truss' ? (
-                                            <TrussBridge loadPoints={loadPoints} damageState={damageState} material={trussMaterial} />
+                                            <TrussBridge
+                                                loadPoints={loadPoints}
+                                                damageState={damageState}
+                                                material={trussMaterial}
+                                                foundationIntegrity={foundationIntegrity}
+                                                foundationLoads={foundationLoads}
+                                                foundationSupports={foundationSupports}
+                                                isCollapse={isCollapse}
+                                            />
                                         ) : (
                                             <ArchBridge loadPoints={loadPoints} damageState={damageState} material={archMaterial} onAddLoad={addLoad} />
                                         )}
@@ -432,8 +537,8 @@ const BridgeSimulator = () => {
                                     <h3 className="font-semibold mb-3">Load Weight</h3>
                                     <input
                                         type="range"
-                                        min="50"
-                                        max="500"
+                                        min="1000"
+                                        max="50000"
                                         step="25"
                                         value={currentWeight}
                                         onChange={(e) => setCurrentWeight(Number(e.target.value))}
@@ -449,83 +554,95 @@ const BridgeSimulator = () => {
                                 </button>
                             </div>
 
-                            {/* Status overlay in 3D area */}
-                            <div className="absolute bottom-4 right-4 bg-card/90 backdrop-blur-sm p-4 rounded-lg shadow-panel border border-border max-w-sm">
-                                <div className="flex items-center justify-between mb-2">
-                                    <h3 className="font-semibold">Bridge Status</h3>
-                                    {realTimeDamageState && (
-                                        <div className="flex items-center gap-1 text-xs text-orange-500">
-                                            <div className="w-2 h-2 bg-orange-500 rounded-full animate-pulse"></div>
+                            {/* Bridge Status Panel - bottom right of simulator area, compact card style */}
+                            <div style={{ position: 'absolute', right: '1rem', bottom: '1rem', zIndex: 50 }}>
+                                <div className="bg-card/90 backdrop-blur-sm rounded-lg shadow-panel bottom-4 right-4 border border-border px-4 py-3 w-[300px]">
+                                    <div className="flex items-center justify-between mb-1">
+                                        <h3 className="font-semibold text-base">Bridge Status</h3>
+                                        <span className="flex items-center gap-1 text-xs text-orange-500">
+                                            <span className="w-2 h-2 bg-orange-500 rounded-full animate-pulse"></span>
                                             LIVE
+                                        </span>
+                                    </div>
+                                    <div className={`text-lg font-bold mb-1 ${isCollapse ? 'text-destructive' : 'text-stress-safe'}`}>{isCollapse ? 'FAILED' : 'SAFE'}</div>
+                                    <div className="space-y-1 text-sm">
+                                        <div className="flex justify-between">
+                                            <span>Integrity</span>
+                                            <span className={`font-mono ${isCollapse ? 'text-destructive' : 'text-stress-safe'}`}>{Math.round((realTimeDamageState || damageState).overallIntegrity * 100)}%</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                            <span>Total Load</span>
+                                            <span className="font-mono text-blue-500">{(totalLoad / 1000).toFixed(1)} t</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                            <span>Safe Limit</span>
+                                            <span className="font-mono">{(capacity.safe / 1000).toFixed(0)} t</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                            <span>Max Limit</span>
+                                            <span className="font-mono">{(capacity.max / 1000).toFixed(0)} t</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                            <span>Collapse Limit (Safety Factor)</span>
+                                            <span className="font-mono">{(collapseThreshold / 1000).toFixed(0)} t</span>
+                                        </div>
+                                    </div>
+                                    {isCollapse && (
+                                        <div className="mt-2 p-2 bg-destructive/10 border border-destructive/20 rounded text-destructive text-xs font-semibold">
+                                            ⚠️ Bridge collapse! Maximum load exceeded.
                                         </div>
                                     )}
-                                </div>
-                                <div className={`text-lg font-bold mb-2 ${(realTimeDamageState || damageState).warningLevel === 'safe' ? 'text-stress-safe' :
-                                    (realTimeDamageState || damageState).warningLevel === 'caution' ? 'text-stress-warning' :
-                                        (realTimeDamageState || damageState).warningLevel === 'danger' ? 'text-stress-danger' :
-                                            'text-stress-critical'
-                                    }`}>
-                                    {(realTimeDamageState || damageState).warningLevel.toUpperCase()}
-                                </div>
-                                <div className="space-y-2 text-sm text-muted-foreground">
-                                    <div>Integrity: {Math.round((realTimeDamageState || damageState).overallIntegrity * 100)}%</div>
-                                    {(realTimeDamageState || damageState).failureMode !== 'none' && (
-                                        <div className="text-stress-critical font-semibold">
-                                            Failure Mode: {(realTimeDamageState || damageState).failureMode}
+                                    {!isCollapse && (totalLoad > capacity.max * 0.85) && (
+                                        <div className="mt-2 p-2 bg-warning/10 border border-warning/20 rounded text-warning text-xs font-semibold">
+                                            ⚠️ Warning: Structural damage detected. Approaching collapse threshold.
                                         </div>
                                     )}
-                                    <div>Active Cracks: {(realTimeDamageState || damageState).cracks.length}</div>
-                                    {currentDynamicLoad > 0 && (
-                                        <div className="pt-2 border-t border-border space-y-1">
-                                            {/* dynamic load details could go here */}
-                                        </div>
-                                    )}
-                                    {(realTimeDamageState || damageState).overallIntegrity < 0.5 && (
-                                        <div className="p-2 bg-destructive/10 border border-destructive/20 rounded text-destructive text-xs">
-                                            ⚠️ Critical structural damage detected!
-                                        </div>
-                                    )}
-                                </div>
-                                <div className="mt-3 pt-2 border-t border-border">
-                                    <h4 className="font-semibold text-xs mb-1">Controls</h4>
-                                    <ul className="text-xs text-muted-foreground space-y-1">
-                                        <li>• Click bridge to add loads</li>
-                                        <li>• Drag to rotate, scroll to zoom</li>
-                                        <li>• Watch for structural damage</li>
-                                    </ul>
+                                    <div className="mt-3 pt-2 border-t border-border">
+                                        <h4 className="font-semibold text-xs mb-1">Controls</h4>
+                                        <ul className="text-xs text-muted-foreground space-y-1">
+                                            <li>• Click bridge to add loads</li>
+                                            <li>• Drag to rotate, scroll to zoom</li>
+                                            <li>• Watch for structural damage</li>
+                                        </ul>
+                                    </div>
                                 </div>
                             </div>
+
                         </div>
                     </main>
                 </div>
 
                 {/* Bottom terminal area (resizable) */}
-                {/* Horizontal resizer */}
-                <div
-                    onMouseDown={() => { isDraggingBottomRef.current = true; document.body.style.userSelect = 'none'; }}
-                    className="h-1 cursor-row-resize bg-border rounded-t"
-                    aria-hidden
-                />
-                <div style={{ height: terminalHeight }} className="mt-2 bg-[#0b1220] text-xs text-green-300 font-mono rounded-b-lg border border-border p-3 overflow-auto">
-                    <div className="flex items-center justify-between">
-                        <div className="font-semibold">Terminal</div>
-                        <div className="text-[11px] text-muted-foreground">Logs & Diagnostics</div>
-                    </div>
-                    <div className="mt-2 text-[12px]">
-                        {/* Placeholder logs - in future hook up real logs or console output */}
-                        <div>Initializing renderer...</div>
-                        <div>Loading assets...</div>
-                        <div>Vehicles loaded: {vehiclesRef.current.length}</div>
-                        <div>Real-time damage monitoring active</div>
-                    </div>
-                </div>
+                {!isFullscreen && (
+                    <>
+                        {/* Horizontal resizer */}
+                        <div
+                            onMouseDown={() => { isDraggingBottomRef.current = true; document.body.style.userSelect = 'none'; }}
+                            className="h-1 cursor-row-resize bg-border rounded-t"
+                            aria-hidden
+                        />
+                        <div style={{ height: terminalHeight }} className="mt-2 bg-[#0b1220] text-xs text-green-300 font-mono rounded-b-lg border border-border p-3 overflow-auto">
+                            <div className="flex items-center justify-between">
+                                <div className="font-semibold">Terminal</div>
+                                <div className="text-[11px] text-muted-foreground">Logs & Diagnostics</div>
+                            </div>
+                            <div className="mt-2 text-[12px]">
+                                {/* Placeholder logs - in future hook up real logs or console output */}
+                                <div>Initializing renderer...</div>
+                                <div>Loading assets...</div>
+                                <div>Vehicles loaded: {vehiclesRef.current.length}</div>
+                                <div>Real-time damage monitoring active</div>
+                            </div>
+                        </div>
+                    </>
+                )}
             </div>
 
             {/* Stress Analysis Panel - shows when loads are applied */}
-            <StressAnalysisPanel
-                loadPoints={loadPoints.filter(load => load.type === 'manual' || (!load.type && !load.id.startsWith('vehicle-')))}
-                isVisible={loadPoints.some(load => load.type === 'manual' || (!load.type && !load.id.startsWith('vehicle-')))}
-            />
+            {/* StressAnalysisPanel removed for clarity. Collapse visualization now fully synchronized with foundation analytics and bridge status. */}
+
+            {/* New Modern Bridge Status Panel Overlay */}
+
         </div>
     );
 };
