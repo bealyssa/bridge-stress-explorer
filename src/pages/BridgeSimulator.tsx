@@ -10,6 +10,7 @@ import { VehicleComponent, LoadPoint as LoadPointVis, ClickHandler } from '@/uti
 import Environment from '@/components/Environment';
 import LoadAnalytics from '@/components/LoadAnalytics';
 import { Button } from '@/components/ui/button';
+import TrussBridgeSpecsModal from '@/components/TrussBridgeSpecsModal';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 interface LoadPoint {
@@ -46,12 +47,26 @@ interface DamageState {
 }
 
 // Simple damage calculation for analytics - Updated to match simulator
-const calculateDamageState = (bridgeType: string, loadPoints: LoadPoint[]): DamageState => {
-    const bridgeCapacities = {
-        truss: { max: 1800, safe: 1200, critical: 1500 },
-        arch: { max: 2500, safe: 1800, critical: 2200 }
-    };
-    const capacity = bridgeCapacities[bridgeType as keyof typeof bridgeCapacities];
+const calculateDamageState = (
+    bridgeType: string,
+    loadPoints: LoadPoint[],
+    trussMaxLoad?: number,
+    trussSafetyFactor?: number
+): DamageState => {
+    let capacity;
+    if (bridgeType === 'truss' && trussMaxLoad) {
+        capacity = {
+            max: trussMaxLoad * 1000,
+            safe: trussMaxLoad * 1000 * 0.67,
+            critical: trussMaxLoad * 1000 * 0.83
+        };
+    } else {
+        capacity = {
+            max: 2500000,
+            safe: 1800000,
+            critical: 2200000
+        };
+    }
     const totalWeight = loadPoints.reduce((sum, load) => sum + load.weight, 0);
     let integrity = 1;
     let failureMode: FailureMode = 'none';
@@ -91,6 +106,9 @@ const calculateDamageState = (bridgeType: string, loadPoints: LoadPoint[]): Dama
 const BridgeSimulator = () => {
     const [bridgeType, setBridgeType] = useState<'truss' | 'arch'>('truss');
     const [trussMaterial, setTrussMaterial] = useState<'steel' | 'wood'>('steel');
+    const [trussMaxLoad, setTrussMaxLoad] = useState<number>(180);
+    const [trussSafetyFactor, setTrussSafetyFactor] = useState<number>(1.5);
+    const [showSpecsModal, setShowSpecsModal] = useState(false);
     const [archMaterial, setArchMaterial] = useState<'wood' | 'steel' | 'concrete'>('wood');
     const [loadPoints, setLoadPoints] = useState<LoadPoint[]>([]);
     const [showAnalytics, setShowAnalytics] = useState(true);
@@ -146,8 +164,8 @@ const BridgeSimulator = () => {
             }));
 
         const allLoadPoints = [...loadPoints, ...vehicleLoadPoints];
-        return calculateDamageState(bridgeType, allLoadPoints);
-    }, [bridgeType, loadPoints, calculateDynamicLoad]);
+        return calculateDamageState(bridgeType, allLoadPoints, trussMaxLoad, trussSafetyFactor);
+    }, [bridgeType, loadPoints, calculateDynamicLoad, trussMaxLoad, trussSafetyFactor]);
 
     // Update analytics in real-time
     React.useEffect(() => {
@@ -241,21 +259,21 @@ const BridgeSimulator = () => {
     // Calculate damage state (now includes vehicles for real-time updates)
     // For truss bridge, use foundation integrity for collapse logic
     const baseDamageState = useMemo(() => {
-        return calculateDamageState(bridgeType, loadPoints);
-    }, [bridgeType, loadPoints]);
+        return calculateDamageState(bridgeType, loadPoints, trussMaxLoad, trussSafetyFactor);
+    }, [bridgeType, loadPoints, trussMaxLoad, trussSafetyFactor]);
 
     // Override for truss bridge foundation collapse
     let damageState = baseDamageState;
     // Only show collapse/failure if total bridge load exceeds maximum capacity
     const safetyFactor = 1.5;
     const bridgeCapacities = {
-        truss: { max: 180000, safe: 120000 },
+        truss: { max: trussMaxLoad * 1000, safe: trussMaxLoad * 1000 * 0.67 },
         arch: { max: 180000, safe: 120000 }
     };
     const capacity = bridgeCapacities[bridgeType];
+    const collapseThreshold = bridgeType === 'truss' ? trussMaxLoad * 1000 * trussSafetyFactor : capacity.max * safetyFactor;
     const staticWeight = loadPoints.reduce((sum, load) => sum + load.weight, 0);
     const totalLoad = staticWeight + dynamicLoad;
-    const collapseThreshold = capacity.max * safetyFactor;
     const isCollapse = totalLoad >= collapseThreshold;
     if (
         bridgeType === 'truss' &&
@@ -329,19 +347,64 @@ const BridgeSimulator = () => {
                         <aside style={{ width: leftWidth }} className="flex-shrink-0 flex flex-col overflow-hidden">
                             <div className="h-full overflow-auto p-2">
                                 <Card className="bg-card/90 backdrop-blur-sm rounded-lg shadow-panel border border-border mb-3">
-                                    <LoadAnalytics
-                                        bridgeType={bridgeType}
-                                        loadPoints={loadPoints}
-                                        damageState={realTimeDamageState || damageState}
-                                        vehiclesOnBridge={vehiclesOnBridge}
-                                        dynamicLoad={dynamicLoad}
-                                    />
+                                    <div className="p-4">
+                                        <h2 className="text-lg font-bold mb-1 text-white">Bridge Status & Analytics</h2>
+                                        <div className="text-muted-foreground mb-3">Live engineering analysis based on real foundation physics</div>
+                                        <div className="flex items-center justify-between mb-2">
+                                            <span className="font-medium">Total Bridge Load</span>
+                                            <span className="font-mono text-blue-400">{(totalLoad / 1000).toFixed(1)} t</span>
+                                        </div>
+                                        <div className="w-full h-2 bg-border rounded mb-1 relative">
+                                            {(() => {
+                                                const percent = Math.min(100, (totalLoad / (trussMaxLoad * 1000)) * 100);
+                                                let barColor = 'bg-blue-500';
+                                                if (percent > 85 && percent < 100) barColor = 'bg-orange-400';
+                                                if (percent >= 100) barColor = 'bg-red-500';
+                                                return (
+                                                    <div
+                                                        className={`absolute top-0 left-0 h-2 rounded ${barColor}`}
+                                                        style={{ width: `${percent}%` }}
+                                                    />
+                                                );
+                                            })()}
+                                        </div>
+                                        <div className="flex justify-between text-xs text-muted-foreground mb-2">
+                                            <span>Safe: {(trussMaxLoad * 0.67).toFixed(0)} t</span>
+                                            <span>Max: {trussMaxLoad} t</span>
+                                        </div>
+                                        <div className="mb-2">
+                                            <span className="font-medium">Safety Margin</span>
+                                        </div>
+                                        <div className="flex gap-6 mb-2">
+                                            <div>
+                                                <span className="font-semibold text-xs text-muted-foreground">Active Vehicles</span>
+                                                <ul className="mt-1">
+                                                    {vehiclesOnBridge.map(v => (
+                                                        <li key={v.id} className="flex items-center gap-2 text-xs">
+                                                            <span role="img" aria-label="car">🚗</span> {v.type} <span className="text-orange-400 font-mono">{v.weight}kg</span>
+                                                        </li>
+                                                    ))}
+                                                    {vehiclesOnBridge.length === 0 && <li className="text-muted-foreground text-xs">None</li>}
+                                                </ul>
+                                            </div>
+                                            <div>
+                                                <span className="font-semibold text-xs text-muted-foreground">Manual Loads</span>
+                                                <ul className="mt-1">
+                                                    {loadPoints.length > 0 ? loadPoints.map(l => (
+                                                        <li key={l.id} className="text-xs font-mono text-purple-400">{l.weight}kg</li>
+                                                    )) : <li className="text-muted-foreground text-xs">None</li>}
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </Card>
                                 {bridgeType === 'truss' && (
                                     <Card className="bg-card/95 backdrop-blur-sm shadow-panel border-border mb-3">
                                         <CardHeader className="pb-0">
                                             <CardTitle className="text-lg text-blue-400 font-semibold">Truss Bridge Specs</CardTitle>
                                             <CardDescription>Technical specifications and limits</CardDescription>
+                                            <Button variant="outline" size="sm" onClick={() => setShowSpecsModal(true)}>Edit</Button>
+
                                         </CardHeader>
                                         <CardContent className="pt-2 pb-3">
                                             <div className="grid grid-cols-2 gap-x-6 gap-y-2 mb-2 text-sm">
@@ -351,15 +414,15 @@ const BridgeSimulator = () => {
                                                 </div>
                                                 <div>
                                                     <span className="font-medium">Material</span>
-                                                    <div className="font-mono text-[15px] text-muted-foreground">Steel</div>
+                                                    <div className="font-mono text-[15px] text-muted-foreground">{trussMaterial === 'wood' ? 'Wood' : 'Steel'}</div>
                                                 </div>
                                                 <div>
                                                     <span className="font-medium">Max Load</span>
-                                                    <div className="font-mono text-[15px] text-muted-foreground">180 t</div>
+                                                    <div className="font-mono text-[15px] text-muted-foreground">{trussMaxLoad} t</div>
                                                 </div>
                                                 <div>
                                                     <span className="font-medium">Safety Factor</span>
-                                                    <div className="font-mono text-[15px] text-muted-foreground">1.5x</div>
+                                                    <div className="font-mono text-[15px] text-muted-foreground">{trussSafetyFactor}x</div>
                                                 </div>
                                             </div>
                                             <hr className="my-2 border-border" />
@@ -369,6 +432,18 @@ const BridgeSimulator = () => {
                                         </CardContent>
                                     </Card>
                                 )}
+                                {/* Modal for editing specs */}
+                                <TrussBridgeSpecsModal
+                                    isOpen={showSpecsModal}
+                                    onClose={() => setShowSpecsModal(false)}
+                                    specs={{ material: trussMaterial, maxLoad: trussMaxLoad, safetyFactor: trussSafetyFactor }}
+                                    onSave={({ material, maxLoad, safetyFactor }) => {
+                                        setTrussMaterial(material);
+                                        setTrussMaxLoad(maxLoad);
+                                        setTrussSafetyFactor(safetyFactor);
+                                        setShowSpecsModal(false); // Ensure modal closes instantly and analytics panel updates
+                                    }}
+                                />
                                 <Card className="mt-3 bg-card/90 backdrop-blur-sm shadow-panel border-border">
                                     <CardHeader>
                                         <CardTitle className="text-lg engineering-title">Learning Objectives</CardTitle>
@@ -448,6 +523,8 @@ const BridgeSimulator = () => {
                                                 foundationLoads={foundationLoads}
                                                 foundationSupports={foundationSupports}
                                                 isCollapse={isCollapse}
+                                                trussMaxLoad={trussMaxLoad}
+                                                trussSafetyFactor={trussSafetyFactor}
                                             />
                                         ) : (
                                             <ArchBridge loadPoints={loadPoints} damageState={damageState} material={archMaterial} onAddLoad={addLoad} />
@@ -564,7 +641,23 @@ const BridgeSimulator = () => {
                                             LIVE
                                         </span>
                                     </div>
-                                    <div className={`text-lg font-bold mb-1 ${isCollapse ? 'text-destructive' : 'text-stress-safe'}`}>{isCollapse ? 'FAILED' : 'SAFE'}</div>
+                                    {(() => {
+                                        const percent = Math.min(100, (totalLoad / (trussMaxLoad * 1000)) * 100);
+                                        const collapseLimit = trussMaxLoad * 1000 * trussSafetyFactor;
+                                        let statusText = 'SAFE';
+                                        let statusClass = 'text-stress-safe';
+                                        if (percent > 85 && totalLoad < trussMaxLoad * 1000) {
+                                            statusText = 'WARNING';
+                                            statusClass = 'text-orange-400';
+                                        } else if (totalLoad >= trussMaxLoad * 1000 && totalLoad < collapseLimit) {
+                                            statusText = 'CRITICAL';
+                                            statusClass = 'text-red-500';
+                                        } else if (totalLoad >= collapseLimit || isCollapse) {
+                                            statusText = 'FAILED';
+                                            statusClass = 'text-destructive';
+                                        }
+                                        return <div className={`text-lg font-bold mb-1 ${statusClass}`}>{statusText}</div>;
+                                    })()}
                                     <div className="space-y-1 text-sm">
                                         <div className="flex justify-between">
                                             <span>Integrity</span>

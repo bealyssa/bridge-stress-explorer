@@ -13,6 +13,8 @@ interface TrussBridgeProps {
     foundationLoads?: number[] | null;
     foundationSupports?: any[] | null;
     isCollapse?: boolean;
+    trussMaxLoad?: number;
+    trussSafetyFactor?: number;
 }
 
 const TrussBridge: React.FC<TrussBridgeProps> = ({
@@ -22,7 +24,9 @@ const TrussBridge: React.FC<TrussBridgeProps> = ({
     foundationIntegrity,
     foundationLoads,
     foundationSupports,
-    isCollapse
+    isCollapse,
+    trussMaxLoad = 180,
+    trussSafetyFactor = 1.5
 }) => {
     const bridgeRef = useRef<THREE.Group>(null);
 
@@ -57,6 +61,12 @@ const TrussBridge: React.FC<TrussBridgeProps> = ({
         // Only show heat map for manual loads (not vehicle loads)
         const manualLoads = loadPoints.filter(load => load.type === 'manual' || (!load.type && !load.id.startsWith('vehicle-')));
 
+        // Get real-time load and thresholds from props
+        const totalLoad = loadPoints.reduce((sum, load) => sum + load.weight, 0);
+        const maxLoad = trussMaxLoad * 1000;
+        const collapseLimit = maxLoad * trussSafetyFactor;
+
+        // Only color the exact position if its local stress is high enough for the status
         if (manualLoads.length === 0) {
             return '#1976D2'; // Professional blue - no stress state
         }
@@ -75,19 +85,15 @@ const TrussBridge: React.FC<TrussBridgeProps> = ({
             let stressInfluence = 0;
             switch (elementType) {
                 case 'deck':
-                    // Deck experiences direct load transfer
                     stressInfluence = load.weight / (1 + distance * 0.3);
                     break;
                 case 'member':
-                    // Truss members distribute stress through structure
                     stressInfluence = load.weight / (1 + distance * 0.8);
                     break;
                 case 'joint':
-                    // Joints concentrate stress
                     stressInfluence = load.weight / (1 + distance * 0.5);
                     break;
             }
-
             totalStress += stressInfluence;
         });
 
@@ -102,16 +108,24 @@ const TrussBridge: React.FC<TrussBridgeProps> = ({
         // Professional thermal color scale - Blue to Red
         const normalizedStress = Math.min(totalStress / 400, 1); // Normalize to 0-1
 
-        if (normalizedStress < 0.1) return '#0D47A1';      // Deep Blue - Very Low
-        if (normalizedStress < 0.2) return '#1976D2';      // Blue - Low  
-        if (normalizedStress < 0.3) return '#42A5F5';      // Light Blue
-        if (normalizedStress < 0.4) return '#81C784';      // Light Green
-        if (normalizedStress < 0.5) return '#66BB6A';      // Green - Safe
-        if (normalizedStress < 0.6) return '#FFEB3B';      // Yellow - Caution
-        if (normalizedStress < 0.7) return '#FFA726';      // Orange - Warning
-        if (normalizedStress < 0.8) return '#FF7043';      // Orange-Red
-        if (normalizedStress < 0.9) return '#F44336';      // Red - Critical
-        return '#D32F2F';                                  // Dark Red - Extreme
+        // Calculate local stress ratio based on bridge capacity
+        const localCapacity = trussMaxLoad * 1000; // kg
+        const stressRatio = Math.max(0, Math.min(1.2, localCapacity > 0 ? totalStress / localCapacity : 0));
+
+        // Color logic: blue (safe), yellow-orange (warning), red (critical), dark red (failed)
+        if (stressRatio < 0.5) return '#1976D2'; // Safe (blue)
+        if (stressRatio >= 0.5 && stressRatio < 0.85) {
+            // Interpolate yellow (#FFEB3B) to orange (#FFA726)
+            const t = (stressRatio - 0.5) / (0.85 - 0.5);
+            const color1 = 0xFFEB3B, color2 = 0xFFA726;
+            const r = Math.round((color1 >> 16) + ((color2 >> 16) - (color1 >> 16)) * t);
+            const g = Math.round(((color1 >> 8) & 0xff) + (((color2 >> 8) & 0xff) - ((color1 >> 8) & 0xff)) * t);
+            const b = Math.round((color1 & 0xff) + ((color2 & 0xff) - (color1 & 0xff)) * t);
+            return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
+        }
+        if (stressRatio >= 0.85 && stressRatio < 1.0) return '#F44336'; // Critical (red)
+        if (stressRatio >= 1.0) return '#D32F2F'; // Failed/extreme (dark red)
+        return '#1976D2';
     };
 
     // Get material properties with heat map override
