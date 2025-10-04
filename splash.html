@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bridge Studio - Loading</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: radial-gradient(ellipse at center, #1e293b 0%, #0f172a 70%, #020617 100%);
+            color: white;
+            font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            position: relative;
+            animation: backgroundShift 8s ease-in-out infinite;
+            border-bottom: 4px solid transparent;
+        }
+
+        /* Progress bar as bottom border */
+        .progress-border {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #3b82f6, #06b6d4, #10b981, #f59e0b);
+            background-size: 200% 100%;
+            animation: progressBorder 3s ease-in-out infinite, gradientShift 2s ease-in-out infinite;
+            transform-origin: left;
+            box-shadow: 0 -2px 20px rgba(59, 130, 246, 0.4), 0 0 30px rgba(59, 130, 246, 0.2);
+            z-index: 1000;
+        }
+
+        @keyframes progressBorder {
+            0% { width: 0%; }
+            20% { width: 20%; }
+            40% { width: 50%; }
+            60% { width: 70%; }
+            80% { width: 90%; }
+            100% { width: 100%; }
+        }
+
+        @keyframes backgroundShift {
+            0%, 100% { background: radial-gradient(ellipse at center, #1e293b 0%, #0f172a 70%, #020617 100%); }
+            50% { background: radial-gradient(ellipse at center, #1e40af 0%, #1e293b 70%, #0f172a 100%); }
+        }
+
+        /* Enhanced particles with different sizes and colors */
+        .particles {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            z-index: 1;
+        }
+
+        .particle {
+            position: absolute;
+            border-radius: 50%;
+            animation: particleFloat 8s ease-in-out infinite;
+            filter: blur(0.5px);
+        }
+
+        .particle.small {
+            width: 1px;
+            height: 1px;
+            background: rgba(59, 130, 246, 0.6);
+        }
+
+        .particle.medium {
+            width: 3px;
+            height: 3px;
+            background: rgba(16, 185, 129, 0.4);
+        }
+
+        .particle.large {
+            width: 4px;
+            height: 4px;
+            background: rgba(6, 182, 212, 0.3);
+        }
+
+        @keyframes particleFloat {
+            0%, 100% { 
+                transform: translateY(0px) translateX(0px) rotate(0deg); 
+                opacity: 0.3; 
+            }
+            25% { 
+                transform: translateY(-30px) translateX(15px) rotate(90deg); 
+                opacity: 0.8; 
+            }
+            50% { 
+                transform: translateY(-10px) translateX(-10px) rotate(180deg); 
+                opacity: 0.5; 
+            }
+            75% { 
+                transform: translateY(-25px) translateX(20px) rotate(270deg); 
+                opacity: 0.9; 
+            }
+        }
+
+        /* Enhanced main content with slide-up animation */
+        .content {
+            z-index: 10;
+            text-align: center;
+            position: relative;
+            animation: slideUpFade 1.5s ease-out;
+        }
+
+        @keyframes slideUpFade {
+            0% { 
+                opacity: 0; 
+                transform: translateY(40px); 
+            }
+            100% { 
+                opacity: 1; 
+                transform: translateY(0); 
+            }
+        }
+
+        .logo {
+            font-size: 4rem;
+            font-weight: 900;
+            background: linear-gradient(135deg, #3b82f6, #06b6d4, #10b981, #f59e0b);
+            background-size: 400% 400%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 0.5rem;
+            animation: logoGlowShift 3s ease-in-out infinite, textShimmer 4s ease-in-out infinite;
+            letter-spacing: -2px;
+        }
+
+        @keyframes logoGlowShift {
+            0%, 100% { 
+                filter: drop-shadow(0 0 15px rgba(59, 130, 246, 0.4)) drop-shadow(0 0 30px rgba(59, 130, 246, 0.2)); 
+                transform: scale(1);
+            }
+            50% { 
+                filter: drop-shadow(0 0 25px rgba(16, 185, 129, 0.6)) drop-shadow(0 0 40px rgba(16, 185, 129, 0.3)); 
+                transform: scale(1.02);
+            }
+        }
+
+        @keyframes textShimmer {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        .subtitle {
+            font-size: 1.4rem;
+            color: #94a3b8;
+            margin-bottom: 2.5rem;
+            font-weight: 400;
+            animation: subtitleFade 2s ease-out 0.5s both;
+            letter-spacing: 0.5px;
+        }
+
+        @keyframes subtitleFade {
+            0% { opacity: 0; transform: translateY(20px); }
+            100% { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Enhanced 3D Bridge icon with more realistic design */
+        .bridge-icon {
+            width: 160px;
+            height: 80px;
+            margin: 0 auto 2.5rem;
+            position: relative;
+            perspective: 1000px;
+            animation: bridgeEntrance 2s ease-out 1s both;
+        }
+
+        @keyframes bridgeEntrance {
+            0% { 
+                opacity: 0; 
+                transform: rotateX(45deg) scale(0.8); 
+            }
+            100% { 
+                opacity: 1; 
+                transform: rotateX(0deg) scale(1); 
+            }
+        }
+
+        .bridge-deck {
+            position: absolute;
+            bottom: 25px;
+            left: 15px;
+            right: 15px;
+            height: 10px;
+            background: linear-gradient(90deg, #3b82f6, #06b6d4, #10b981);
+            border-radius: 5px;
+            animation: bridgeBuildDelayed 4s ease-in-out infinite;
+            box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .bridge-pillar {
+            position: absolute;
+            bottom: 0;
+            width: 8px;
+            height: 50px;
+            background: linear-gradient(180deg, #64748b, #475569);
+            border-radius: 4px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
+            animation: pillarRise 2s ease-out infinite;
+        }
+
+        .bridge-pillar:nth-child(1) { 
+            left: 25px; 
+            animation-delay: 0.2s;
+        }
+        .bridge-pillar:nth-child(2) { 
+            right: 25px; 
+            animation-delay: 0.4s;
+        }
+
+        @keyframes pillarRise {
+            0%, 90% { transform: scaleY(1); }
+            95% { transform: scaleY(1.05); }
+            100% { transform: scaleY(1); }
+        }
+
+        .bridge-cable {
+            position: absolute;
+            width: 2px;
+            background: linear-gradient(180deg, #06b6d4, #0ea5e9);
+            top: 8px;
+            height: 30px;
+            border-radius: 1px;
+            animation: cableVibrate 3s ease-in-out infinite;
+            box-shadow: 0 0 5px rgba(6, 182, 212, 0.5);
+        }
+
+        .bridge-cable:nth-child(3) { left: 45px; animation-delay: 0.1s; }
+        .bridge-cable:nth-child(4) { left: 60px; animation-delay: 0.3s; }
+        .bridge-cable:nth-child(5) { right: 45px; animation-delay: 0.2s; }
+        .bridge-cable:nth-child(6) { right: 60px; animation-delay: 0.4s; }
+
+        @keyframes cableVibrate {
+            0%, 100% { transform: scaleY(1) translateX(0); }
+            25% { transform: scaleY(1.02) translateX(0.5px); }
+            50% { transform: scaleY(1) translateX(0); }
+            75% { transform: scaleY(1.02) translateX(-0.5px); }
+        }
+
+        @keyframes bridgeBuildDelayed {
+            0%, 100% { 
+                transform: scaleX(1); 
+                box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3); 
+            }
+            50% { 
+                transform: scaleX(1.03); 
+                box-shadow: 0 6px 25px rgba(16, 185, 129, 0.4); 
+            }
+        }
+
+        /* Remove old loading bar styles */
+        
+        .loading-text {
+            font-size: 1rem;
+            color: #94a3b8;
+            margin-bottom: 2rem;
+            animation: textGlow 2s ease-in-out infinite;
+            font-weight: 500;
+            letter-spacing: 0.5px;
+        }
+
+        @keyframes textGlow {
+            0%, 100% { 
+                opacity: 0.7; 
+                text-shadow: 0 0 10px rgba(148, 163, 184, 0.3); 
+            }
+            50% { 
+                opacity: 1; 
+                text-shadow: 0 0 20px rgba(148, 163, 184, 0.6); 
+            }
+        }
+
+        @keyframes gradientShift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        /* Enhanced features with glassmorphism cards */
+        .features {
+            position: absolute;
+            bottom: 50px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 1.5rem;
+            font-size: 0.85rem;
+            color: #94a3b8;
+            animation: featuresSlideUp 1s ease-out 2s both;
+        }
+
+        @keyframes featuresSlideUp {
+            0% { opacity: 0; transform: translateX(-50%) translateY(20px); }
+            100% { opacity: 1; transform: translateX(-50%) translateY(0); }
+        }
+
+        .feature {
+            display: flex;
+            align-items: center;
+            gap: 0.7rem;
+            padding: 0.8rem 1.2rem;
+            background: rgba(30, 41, 59, 0.3);
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.3s ease;
+        }
+
+        .feature:hover {
+            background: rgba(30, 41, 59, 0.5);
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(59, 130, 246, 0.2);
+        }
+
+        .feature-icon {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            animation: iconPulseEnhanced 2.5s ease-in-out infinite;
+            box-shadow: 0 0 10px currentColor;
+        }
+
+        .feature:nth-child(1) .feature-icon {
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+            animation-delay: 0s;
+        }
+
+        .feature:nth-child(2) .feature-icon {
+            background: linear-gradient(135deg, #10b981, #059669);
+            animation-delay: 0.5s;
+        }
+
+        .feature:nth-child(3) .feature-icon {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            animation-delay: 1s;
+        }
+
+        @keyframes iconPulseEnhanced {
+            0%, 100% { 
+                transform: scale(1); 
+                opacity: 0.8; 
+                box-shadow: 0 0 10px currentColor; 
+            }
+            50% { 
+                transform: scale(1.3); 
+                opacity: 1; 
+                box-shadow: 0 0 20px currentColor; 
+            }
+        }
+
+        /* Enhanced version with subtle animation */
+        .version {
+            position: absolute;
+            bottom: 20px;
+            right: 25px;
+            font-size: 0.75rem;
+            color: #64748b;
+            animation: versionFade 1s ease-out 3s both;
+            padding: 0.3rem 0.6rem;
+            background: rgba(30, 41, 59, 0.2);
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        @keyframes versionFade {
+            0% { opacity: 0; }
+            100% { opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Animated particles background -->
+    <div class="particles" id="particles"></div>
+    
+    <!-- Progress bar as bottom border -->
+    <div class="progress-border"></div>
+
+    <div class="content">
+        <!-- Bridge icon -->
+        <div class="bridge-icon">
+            <div class="bridge-pillar"></div>
+            <div class="bridge-pillar"></div>
+            <div class="bridge-cable"></div>
+            <div class="bridge-cable"></div>
+            <div class="bridge-cable"></div>
+            <div class="bridge-cable"></div>
+            <div class="bridge-deck"></div>
+        </div>
+
+        <!-- Main branding -->
+        <h1 class="logo">Bridge Studio</h1>
+        <p class="subtitle">3D Bridge Load Simulator</p>
+
+        <!-- Loading animation -->
+        <div class="loading-text" id="loadingText">Initializing physics engine...</div>
+    </div>
+  
+
+    <!-- Version -->
+    <div class="version">v1.0.0</div>
+
+    <script>
+        // Enhanced particle system with different types
+        function createParticles() {
+            const particlesContainer = document.getElementById('particles');
+            const particleCount = 80;
+            const particleTypes = ['small', 'medium', 'large'];
+
+            for (let i = 0; i < particleCount; i++) {
+                const particle = document.createElement('div');
+                const type = particleTypes[Math.floor(Math.random() * particleTypes.length)];
+                particle.className = `particle ${type}`;
+                
+                // Random position
+                particle.style.left = Math.random() * 100 + '%';
+                particle.style.top = Math.random() * 100 + '%';
+                
+                // Random animation properties
+                particle.style.animationDelay = Math.random() * 8 + 's';
+                particle.style.animationDuration = (Math.random() * 6 + 6) + 's';
+                
+                particlesContainer.appendChild(particle);
+            }
+        }
+
+        // Enhanced loading messages with engineering terminology
+        const loadingMessages = [
+            'Initializing physics engine...',
+            'Loading WebGL renderer...',
+            'Calibrating structural analysis...',
+            'Setting up Three.js environment...',
+            'Loading bridge components...',
+            'Preparing vehicle simulation...',
+            'Optimizing stress calculations...',
+            'Finalizing damage visualization...',
+            'Bridge Studio ready!'
+        ];
+
+        let messageIndex = 0;
+        const loadingTextElement = document.getElementById('loadingText');
+
+        function updateLoadingText() {
+            if (messageIndex < loadingMessages.length - 1) {
+                messageIndex++;
+                loadingTextElement.style.opacity = '0';
+                loadingTextElement.style.transform = 'translateY(10px)';
+                
+                setTimeout(() => {
+                    loadingTextElement.textContent = loadingMessages[messageIndex];
+                    loadingTextElement.style.opacity = '1';
+                    loadingTextElement.style.transform = 'translateY(0)';
+                    loadingTextElement.style.transition = 'all 0.3s ease-out';
+                }, 150);
+                
+                setTimeout(updateLoadingText, 900);
+            }
+        }
+
+        // Add typing effect to loading text
+        function typeWriterEffect(element, text, speed = 50) {
+            element.textContent = '';
+            let i = 0;
+            const timer = setInterval(() => {
+                element.textContent += text.charAt(i);
+                i++;
+                if (i >= text.length) {
+                    clearInterval(timer);
+                }
+            }, speed);
+        }
+
+        // Initialize enhanced splash screen
+        createParticles();
+        
+        // Start with typing effect for first message
+        setTimeout(() => {
+            typeWriterEffect(loadingTextElement, loadingMessages[0], 30);
+        }, 500);
+        
+        setTimeout(updateLoadingText, 1500);
+
+        // Enhanced exit animation
+        setTimeout(() => {
+            document.body.style.opacity = '0';
+            document.body.style.transform = 'scale(1.05)';
+            document.body.style.transition = 'all 0.8s ease-in-out';
+        }, 6500);
+    </script>
+</body>
+</html>
