@@ -131,6 +131,21 @@ const BridgeSimulator = () => {
     const isDraggingLeftRef = useRef(false);
     const isDraggingBottomRef = useRef(false);
 
+    // Terminal logs state
+    const [terminalLogs, setTerminalLogs] = useState<string[]>([
+        `[${new Date().toLocaleTimeString()}] Bridge Studio initialized`,
+        `[${new Date().toLocaleTimeString()}] Physics engine loaded`,
+        `[${new Date().toLocaleTimeString()}] Vehicle simulation ready`,
+        `[${new Date().toLocaleTimeString()}] Damage monitoring active - Event-driven logging enabled`
+    ]);
+
+    const addTerminalLog = useCallback((msg: string) => {
+        setTerminalLogs(logs => [
+            `[${new Date().toLocaleTimeString()}] ${msg}`,
+            ...logs.slice(0, 49)
+        ]);
+    }, []);
+
     // Calculate dynamic vehicle loads in real-time
     const calculateDynamicLoad = useCallback(() => {
         const bridgeStart = -14;
@@ -172,21 +187,103 @@ const BridgeSimulator = () => {
         return calculateDamageState(bridgeType, allLoadPoints, trussMaxLoad, trussSafetyFactor);
     }, [bridgeType, loadPoints, calculateDynamicLoad, trussMaxLoad, trussSafetyFactor]);
 
+    // Track previous state to detect changes
+    const prevVehicleCountRef = useRef(0);
+    const prevWarningLevelRef = useRef<WarningLevel>('safe');
+    const prevFailureModeRef = useRef<FailureMode>('none');
+    const prevBridgeStatusRef = useRef<string>('SAFE');
+
     // Update analytics in real-time
     React.useEffect(() => {
         const updateAnalytics = () => {
             const { dynamicLoad, vehiclesOnBridge } = calculateDynamicLoad();
-            const damageState = calculateTotalDamageState();
+            const staticWeight = loadPoints.reduce((sum, load) => sum + load.weight, 0);
+            const totalLoad = staticWeight + dynamicLoad;
+            const allLoadPoints = [
+                ...loadPoints,
+                ...vehiclesRef.current.filter(v => v.isOnBridge).map(v => ({
+                    id: `vehicle-${v.id}`,
+                    position: v.position,
+                    weight: v.weight,
+                    type: 'vehicle' as const
+                }))
+            ];
+            const damageState = calculateDamageState(bridgeType, allLoadPoints, trussMaxLoad, trussSafetyFactor);
 
             setRealTimeDamageState(damageState);
             setCurrentDynamicLoad(dynamicLoad);
             setVehiclesOnBridgeCount(vehiclesOnBridge.length);
             setVehiclesOnBridge(vehiclesOnBridge);
             setDynamicLoad(dynamicLoad);
+
+            // Only log when there are actual changes
+            const currentVehicleCount = vehiclesOnBridge.length;
+            const vehicleCountChanged = currentVehicleCount !== prevVehicleCountRef.current;
+            const warningLevelChanged = damageState.warningLevel !== prevWarningLevelRef.current;
+            const failureModeChanged = damageState.failureMode !== prevFailureModeRef.current;
+
+            // Calculate bridge status (same logic as the status panel)
+            let percent, collapseLimit, currentBridgeStatus = 'SAFE';
+            if (bridgeType === 'truss') {
+                percent = Math.min(100, (totalLoad / (trussMaxLoad * 1000)) * 100);
+                collapseLimit = trussMaxLoad * 1000 * trussSafetyFactor;
+                if (percent > 85 && totalLoad < trussMaxLoad * 1000) {
+                    currentBridgeStatus = 'WARNING';
+                } else if (totalLoad >= trussMaxLoad * 1000 && totalLoad < collapseLimit) {
+                    currentBridgeStatus = 'CRITICAL';
+                } else if (totalLoad >= collapseLimit || isCollapse) {
+                    currentBridgeStatus = 'FAILED';
+                }
+            } else {
+                percent = Math.min(100, (totalLoad / (archMaxLoad * 1000)) * 100);
+                collapseLimit = archMaxLoad * 1000 * archSafetyFactor;
+                if (percent > 85 && totalLoad < archMaxLoad * 1000) {
+                    currentBridgeStatus = 'WARNING';
+                } else if (totalLoad >= archMaxLoad * 1000 && totalLoad < collapseLimit) {
+                    currentBridgeStatus = 'CRITICAL';
+                } else if (totalLoad >= collapseLimit || isCollapse) {
+                    currentBridgeStatus = 'FAILED';
+                }
+            }
+            const bridgeStatusChanged = currentBridgeStatus !== prevBridgeStatusRef.current;
+
+            // Log bridge status changes
+            if (bridgeStatusChanged) {
+                addTerminalLog(`Bridge Status: ${prevBridgeStatusRef.current} → ${currentBridgeStatus}`);
+                addTerminalLog(`Load: ${totalLoad.toFixed(1)} kg | Integrity: ${(damageState.overallIntegrity * 100).toFixed(1)}% | Status: ${currentBridgeStatus}`);
+            }
+
+            // Log vehicle changes
+            if (vehicleCountChanged) {
+                if (currentVehicleCount > prevVehicleCountRef.current) {
+                    const newVehicles = vehiclesOnBridge.filter(v =>
+                        !vehiclesRef.current.slice(0, prevVehicleCountRef.current).some(prev => prev.id === v.id && prev.isOnBridge)
+                    );
+                    newVehicles.forEach(v => {
+                        addTerminalLog(`Vehicle ${v.type} (${v.weight}kg) entered bridge`);
+                    });
+                } else if (currentVehicleCount < prevVehicleCountRef.current) {
+                    addTerminalLog(`Vehicle left bridge | Total vehicles: ${currentVehicleCount}`);
+                }
+                if (!bridgeStatusChanged) { // Only log load info if status didn't change (to avoid duplicate logs)
+                    addTerminalLog(`Load: ${totalLoad.toFixed(1)} kg | Integrity: ${(damageState.overallIntegrity * 100).toFixed(1)}% | Vehicles: ${currentVehicleCount}`);
+                }
+            }
+
+            // Log failure mode changes - ONLY when bridge status is FAILED
+            if (failureModeChanged && damageState.failureMode !== 'none' && currentBridgeStatus === 'FAILED') {
+                addTerminalLog(`FAILURE_MODE|Failure Mode Detected: ${damageState.failureMode.toUpperCase()}`);
+            }
+
+            // Update refs
+            prevVehicleCountRef.current = currentVehicleCount;
+            prevWarningLevelRef.current = damageState.warningLevel;
+            prevFailureModeRef.current = damageState.failureMode;
+            prevBridgeStatusRef.current = currentBridgeStatus;
         };
-        const interval = setInterval(updateAnalytics, 100);
+        const interval = setInterval(updateAnalytics, 300);
         return () => clearInterval(interval);
-    }, [calculateDynamicLoad, calculateTotalDamageState]);
+    }, [calculateDynamicLoad, bridgeType, loadPoints, trussMaxLoad, trussSafetyFactor, addTerminalLog]);
 
     // Resize handlers for left sidebar and bottom terminal
     useEffect(() => {
@@ -303,14 +400,23 @@ const BridgeSimulator = () => {
         };
         const newLoadPoints = [...loadPoints, newLoad];
         setLoadPoints(newLoadPoints);
-        // Immediately update analytics and status for manual loads
-        // This ensures the UI reflects the new load and physics instantly
-        // (If analytics logic is in a useEffect, this will trigger it)
-    }, [currentWeight, loadPoints]);
+
+        // Log manual load addition
+        addTerminalLog(`Manual load added: ${currentWeight}kg at position [${position[0].toFixed(1)}, ${position[1].toFixed(1)}, ${position[2].toFixed(1)}]`);
+
+        // Calculate new total load and log status
+        const staticWeight = newLoadPoints.reduce((sum, load) => sum + load.weight, 0);
+        const totalLoad = staticWeight + dynamicLoad;
+        addTerminalLog(`Total load updated: ${totalLoad.toFixed(1)} kg | Static: ${staticWeight.toFixed(1)} kg | Dynamic: ${dynamicLoad.toFixed(1)} kg`);
+    }, [currentWeight, loadPoints, dynamicLoad, addTerminalLog]);
 
     const clearLoads = useCallback(() => {
+        if (loadPoints.length > 0) {
+            addTerminalLog(`Cleared ${loadPoints.length} manual load(s)`);
+            addTerminalLog(`Load reduced by ${loadPoints.reduce((sum, load) => sum + load.weight, 0).toFixed(1)} kg`);
+        }
         setLoadPoints([]);
-    }, []);
+    }, [loadPoints, addTerminalLog]);
 
     const handleBridgeTypeChange = useCallback((type: 'truss' | 'arch') => {
         setBridgeType(type);
@@ -329,12 +435,6 @@ const BridgeSimulator = () => {
                     <div className="flex items-center gap-3">
                         <div className="px-3 py-1 rounded bg-gradient-to-br from-slate-700 to-slate-800 text-white font-semibold">Bridge Studio</div>
                         <div className="text-muted-foreground">3D Bridge Load Simulator</div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <button className="px-2 py-1 rounded bg-transparent hover:bg-slate-700">File</button>
-                        <button className="px-2 py-1 rounded bg-transparent hover:bg-slate-700">Edit</button>
-                        <button className="px-2 py-1 rounded bg-transparent hover:bg-slate-700">View</button>
-                        <button className="px-2 py-1 rounded bg-transparent hover:bg-slate-700">Help</button>
                     </div>
                     <div className="flex items-center gap-2">
                         <Button variant={showAnalytics ? "engineering" : "outline"} size="sm" onClick={() => setShowAnalytics(!showAnalytics)}>Analytics</Button>
@@ -795,17 +895,34 @@ const BridgeSimulator = () => {
                             className="h-1 cursor-row-resize bg-border rounded-t"
                             aria-hidden
                         />
-                        <div style={{ height: terminalHeight }} className="mt-2 bg-[#0b1220] text-xs text-green-300 font-mono rounded-b-lg border border-border p-3 overflow-auto">
-                            <div className="flex items-center justify-between">
-                                <div className="font-semibold">Terminal</div>
-                                <div className="text-[11px] text-muted-foreground">Logs & Diagnostics</div>
+                        <div style={{ height: terminalHeight }} className="mt-2 bg-[#0b1220] text-xs font-mono rounded-b-lg border border-border p-2 overflow-auto">
+                            <div className="flex items-center justify-between pb-1 border-b border-border">
+                                <div className="font-semibold text-green-300">Engineering Terminal</div>
+                                <div className="text-[11px] text-muted-foreground">Live Physics & Diagnostics</div>
                             </div>
-                            <div className="mt-2 text-[12px]">
-                                {/* Placeholder logs - in future hook up real logs or console output */}
-                                <div>Initializing renderer...</div>
-                                <div>Loading assets...</div>
-                                <div>Vehicles loaded: {vehiclesRef.current.length}</div>
-                                <div>Real-time damage monitoring active</div>
+                            <div className="mt-1 grid grid-cols-1 gap-0.5">
+                                {/* Physics formulas */}
+                                <div className="text-slate-400 text-[11px] pb-1 border-b border-border">
+                                    <span>Formula: <span className="text-yellow-300">Integrity = 1 - (TotalWeight - MaxCapacity) / MaxCapacity</span></span>
+                                    <span className="ml-4">Safety Margin: <span className="text-yellow-300">MaxLoad × SafetyFactor</span></span>
+                                </div>
+                                {/* Real-time logs */}
+                                {terminalLogs.map((log, idx) => {
+                                    let color = 'text-green-300'; // default color
+
+                                    // Only color-code bridge status transitions
+                                    if (log.includes('Bridge Status:') && log.includes('→ FAILED')) color = 'text-red-500 font-bold';
+                                    else if (log.includes('Bridge Status:') && log.includes('→ CRITICAL')) color = 'text-orange-500 font-bold';
+                                    else if (log.includes('Bridge Status:') && log.includes('→ WARNING')) color = 'text-yellow-500 font-bold';
+                                    else if (log.includes('Bridge Status:') && log.includes('→ SAFE')) color = 'text-green-500 font-bold';
+
+                                    // Clean up failure mode log display
+                                    const displayLog = log.replace('FAILURE_MODE|', '');
+
+                                    return (
+                                        <div key={idx} className={color + ' whitespace-pre'}>{displayLog}</div>
+                                    );
+                                })}
                             </div>
                         </div>
                     </>
