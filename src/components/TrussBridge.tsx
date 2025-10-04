@@ -408,6 +408,44 @@ const TrussBridge: React.FC<TrussBridgeProps> = ({
                         const topY1 = deckHeight + bridgeHeight + getDamageOffset([x1, deckHeight + bridgeHeight, 0]);
                         const topY2 = deckHeight + bridgeHeight + getDamageOffset([x2, deckHeight + bridgeHeight, 0]);
 
+                        // At the ends, only slanted-down braces
+                        if (i === 0) {
+                            // First panel: top-right to bottom-left (slanted down)
+                            const dx = x1 - x2; // swapped direction
+                            const dy = bottomY2 - topY1;
+                            const len = Math.sqrt(dx * dx + dy * dy);
+                            const angle = Math.atan2(dy, dx);
+
+                            return (
+                                <group
+                                    key={`xbrace-right-end-down`}
+                                    position={[(x1 + x2) / 2, (topY1 + bottomY2) / 2, 0]}
+                                    rotation={[0, 0, angle]}
+                                >
+                                    <mesh>
+                                        <boxGeometry args={[len, 0.12, 0.08]} />
+                                        <meshStandardMaterial {...getPlateMaterialProps()} />
+                                    </mesh>
+                                </group>
+                            );
+
+                        }
+                        if (i === numPanels - 1) {
+                            // Last panel: top-right to bottom-left (slanted down)
+                            const dx = x2 - x1;
+                            const dy = bottomY2 - topY1;
+                            const len = Math.sqrt(dx * dx + dy * dy);
+                            const angle = Math.atan2(dy, dx);
+                            return (
+                                <group key={`xbrace-left-end-down-last`} position={[(x1 + x2) / 2, (topY1 + bottomY2) / 2, 0]} rotation={[0, 0, angle]}>
+                                    <mesh>
+                                        <boxGeometry args={[len, 0.12, 0.08]} />
+                                        <meshStandardMaterial {...getPlateMaterialProps()} />
+                                    </mesh>
+                                </group>
+                            );
+                        }
+                        // Middle panels: keep crossing X-braces
                         // Member A: bottom-left -> top-right
                         const dxA = x2 - x1;
                         const dyA = topY2 - bottomY1;
@@ -601,6 +639,49 @@ const TrussBridge: React.FC<TrussBridgeProps> = ({
                         const topY1 = deckHeight + bridgeHeight + getDamageOffset([x1, deckHeight + bridgeHeight, 0]);
                         const topY2 = deckHeight + bridgeHeight + getDamageOffset([x2, deckHeight + bridgeHeight, 0]);
 
+                        // At the ends, only slanted-down braces
+                        if (i === 0) {
+                            // First panel: top-right to bottom-left (slanted down)
+                            const dx = x1 - x2; // swapped direction
+                            const dy = bottomY2 - topY1;
+                            const len = Math.sqrt(dx * dx + dy * dy);
+                            const angle = Math.atan2(dy, dx);
+
+                            return (
+                                <group
+                                    key={`xbrace-right-end-down`}
+                                    position={[(x1 + x2) / 2, (topY1 + bottomY2) / 2, 0]}
+                                    rotation={[0, 0, angle]}
+                                >
+                                    <mesh>
+                                        <boxGeometry args={[len, 0.12, 0.08]} />
+                                        <meshStandardMaterial {...getPlateMaterialProps()} />
+                                    </mesh>
+                                </group>
+                            );
+
+                        }
+                        if (i === numPanels - 1) {
+                            // Last panel: top-right to bottom-left (slanted down)
+                            const dx = x2 - x1;
+                            const dy = bottomY2 - topY1; // still downward slope
+                            const len = Math.sqrt(dx * dx + dy * dy);
+                            const angle = Math.atan2(dy, dx);
+
+                            return (
+                                <group
+                                    key={`xbrace-left-down-last`}
+                                    position={[(x1 + x2) / 2, (topY1 + bottomY2) / 2, 0]}
+                                    rotation={[0, 0, angle]}
+                                >
+                                    <mesh>
+                                        <boxGeometry args={[len, 0.12, 0.08]} />
+                                        <meshStandardMaterial {...getPlateMaterialProps()} />
+                                    </mesh>
+                                </group>
+                            );
+                        }
+                        // Middle panels: keep crossing X-braces
                         // Member A: bottom-left -> top-right
                         const dxA = x2 - x1;
                         const dyA = topY2 - bottomY1;
@@ -690,7 +771,7 @@ const TrussBridge: React.FC<TrussBridgeProps> = ({
                             <meshStandardMaterial {...getMemberMaterialProps([x, yBottom, 0])} />
                         </mesh>
                         {/* Vertical posts at panel boundaries (wood mode) - simulate straight foundation supports */}
-                        {material === 'wood' && (
+                        {material === 'wood' && i !== 0 && i !== numPanels && (
                             <>
                                 {/* Left-side vertical post */}
                                 <mesh position={[x, (yTop + yBottom) / 2, -trussWidth / 2 + 0.05]}>
