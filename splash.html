@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -41,17 +42,41 @@
         }
 
         @keyframes progressBorder {
-            0% { width: 0%; }
-            20% { width: 20%; }
-            40% { width: 50%; }
-            60% { width: 70%; }
-            80% { width: 90%; }
-            100% { width: 100%; }
+            0% {
+                width: 0%;
+            }
+
+            20% {
+                width: 20%;
+            }
+
+            40% {
+                width: 50%;
+            }
+
+            60% {
+                width: 70%;
+            }
+
+            80% {
+                width: 90%;
+            }
+
+            100% {
+                width: 100%;
+            }
         }
 
         @keyframes backgroundShift {
-            0%, 100% { background: radial-gradient(ellipse at center, #1e293b 0%, #0f172a 70%, #020617 100%); }
-            50% { background: radial-gradient(ellipse at center, #1e40af 0%, #1e293b 70%, #0f172a 100%); }
+
+            0%,
+            100% {
+                background: radial-gradient(ellipse at center, #1e293b 0%, #0f172a 70%, #020617 100%);
+            }
+
+            50% {
+                background: radial-gradient(ellipse at center, #1e40af 0%, #1e293b 70%, #0f172a 100%);
+            }
         }
 
         /* Enhanced particles with different sizes and colors */
@@ -91,21 +116,26 @@
         }
 
         @keyframes particleFloat {
-            0%, 100% { 
-                transform: translateY(0px) translateX(0px) rotate(0deg); 
-                opacity: 0.3; 
+
+            0%,
+            100% {
+                transform: translateY(0px) translateX(0px) rotate(0deg);
+                opacity: 0.3;
             }
-            25% { 
-                transform: translateY(-30px) translateX(15px) rotate(90deg); 
-                opacity: 0.8; 
+
+            25% {
+                transform: translateY(-30px) translateX(15px) rotate(90deg);
+                opacity: 0.8;
             }
-            50% { 
-                transform: translateY(-10px) translateX(-10px) rotate(180deg); 
-                opacity: 0.5; 
+
+            50% {
+                transform: translateY(-10px) translateX(-10px) rotate(180deg);
+                opacity: 0.5;
             }
-            75% { 
-                transform: translateY(-25px) translateX(20px) rotate(270deg); 
-                opacity: 0.9; 
+
+            75% {
+                transform: translateY(-25px) translateX(20px) rotate(270deg);
+                opacity: 0.9;
             }
         }
 
@@ -118,13 +148,14 @@
         }
 
         @keyframes slideUpFade {
-            0% { 
-                opacity: 0; 
-                transform: translateY(40px); 
+            0% {
+                opacity: 0;
+                transform: translateY(40px);
             }
-            100% { 
-                opacity: 1; 
-                transform: translateY(0); 
+
+            100% {
+                opacity: 1;
+                transform: translateY(0);
             }
         }
 
@@ -142,20 +173,31 @@
         }
 
         @keyframes logoGlowShift {
-            0%, 100% { 
-                filter: drop-shadow(0 0 15px rgba(59, 130, 246, 0.4)) drop-shadow(0 0 30px rgba(59, 130, 246, 0.2)); 
+
+            0%,
+            100% {
+                filter: drop-shadow(0 0 15px rgba(59, 130, 246, 0.4)) drop-shadow(0 0 30px rgba(59, 130, 246, 0.2));
                 transform: scale(1);
             }
-            50% { 
-                filter: drop-shadow(0 0 25px rgba(16, 185, 129, 0.6)) drop-shadow(0 0 40px rgba(16, 185, 129, 0.3)); 
+
+            50% {
+                filter: drop-shadow(0 0 25px rgba(16, 185, 129, 0.6)) drop-shadow(0 0 40px rgba(16, 185, 129, 0.3));
                 transform: scale(1.02);
             }
         }
 
         @keyframes textShimmer {
-            0% { background-position: 0% 50%; }
-            50% { background-position: 100% 50%; }
-            100% { background-position: 0% 50%; }
+            0% {
+                background-position: 0% 50%;
+            }
+
+            50% {
+                background-position: 100% 50%;
+            }
+
+            100% {
+                background-position: 0% 50%;
+            }
         }
 
         .subtitle {
@@ -168,8 +210,15 @@
         }
 
         @keyframes subtitleFade {
-            0% { opacity: 0; transform: translateY(20px); }
-            100% { opacity: 1; transform: translateY(0); }
+            0% {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            100% {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
 
         /* Enhanced 3D Bridge icon with more realistic design */
@@ -183,13 +232,14 @@
         }
 
         @keyframes bridgeEntrance {
-            0% { 
-                opacity: 0; 
-                transform: rotateX(45deg) scale(0.8); 
+            0% {
+                opacity: 0;
+                transform: rotateX(45deg) scale(0.8);
             }
-            100% { 
-                opacity: 1; 
-                transform: rotateX(0deg) scale(1); 
+
+            100% {
+                opacity: 1;
+                transform: rotateX(0deg) scale(1);
             }
         }
 
@@ -217,19 +267,30 @@
             animation: pillarRise 2s ease-out infinite;
         }
 
-        .bridge-pillar:nth-child(1) { 
-            left: 25px; 
+        .bridge-pillar:nth-child(1) {
+            left: 25px;
             animation-delay: 0.2s;
         }
-        .bridge-pillar:nth-child(2) { 
-            right: 25px; 
+
+        .bridge-pillar:nth-child(2) {
+            right: 25px;
             animation-delay: 0.4s;
         }
 
         @keyframes pillarRise {
-            0%, 90% { transform: scaleY(1); }
-            95% { transform: scaleY(1.05); }
-            100% { transform: scaleY(1); }
+
+            0%,
+            90% {
+                transform: scaleY(1);
+            }
+
+            95% {
+                transform: scaleY(1.05);
+            }
+
+            100% {
+                transform: scaleY(1);
+            }
         }
 
         .bridge-cable {
@@ -243,31 +304,62 @@
             box-shadow: 0 0 5px rgba(6, 182, 212, 0.5);
         }
 
-        .bridge-cable:nth-child(3) { left: 45px; animation-delay: 0.1s; }
-        .bridge-cable:nth-child(4) { left: 60px; animation-delay: 0.3s; }
-        .bridge-cable:nth-child(5) { right: 45px; animation-delay: 0.2s; }
-        .bridge-cable:nth-child(6) { right: 60px; animation-delay: 0.4s; }
+        .bridge-cable:nth-child(3) {
+            left: 45px;
+            animation-delay: 0.1s;
+        }
+
+        .bridge-cable:nth-child(4) {
+            left: 60px;
+            animation-delay: 0.3s;
+        }
+
+        .bridge-cable:nth-child(5) {
+            right: 45px;
+            animation-delay: 0.2s;
+        }
+
+        .bridge-cable:nth-child(6) {
+            right: 60px;
+            animation-delay: 0.4s;
+        }
 
         @keyframes cableVibrate {
-            0%, 100% { transform: scaleY(1) translateX(0); }
-            25% { transform: scaleY(1.02) translateX(0.5px); }
-            50% { transform: scaleY(1) translateX(0); }
-            75% { transform: scaleY(1.02) translateX(-0.5px); }
+
+            0%,
+            100% {
+                transform: scaleY(1) translateX(0);
+            }
+
+            25% {
+                transform: scaleY(1.02) translateX(0.5px);
+            }
+
+            50% {
+                transform: scaleY(1) translateX(0);
+            }
+
+            75% {
+                transform: scaleY(1.02) translateX(-0.5px);
+            }
         }
 
         @keyframes bridgeBuildDelayed {
-            0%, 100% { 
-                transform: scaleX(1); 
-                box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3); 
+
+            0%,
+            100% {
+                transform: scaleX(1);
+                box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);
             }
-            50% { 
-                transform: scaleX(1.03); 
-                box-shadow: 0 6px 25px rgba(16, 185, 129, 0.4); 
+
+            50% {
+                transform: scaleX(1.03);
+                box-shadow: 0 6px 25px rgba(16, 185, 129, 0.4);
             }
         }
 
         /* Remove old loading bar styles */
-        
+
         .loading-text {
             font-size: 1rem;
             color: #94a3b8;
@@ -278,20 +370,31 @@
         }
 
         @keyframes textGlow {
-            0%, 100% { 
-                opacity: 0.7; 
-                text-shadow: 0 0 10px rgba(148, 163, 184, 0.3); 
+
+            0%,
+            100% {
+                opacity: 0.7;
+                text-shadow: 0 0 10px rgba(148, 163, 184, 0.3);
             }
-            50% { 
-                opacity: 1; 
-                text-shadow: 0 0 20px rgba(148, 163, 184, 0.6); 
+
+            50% {
+                opacity: 1;
+                text-shadow: 0 0 20px rgba(148, 163, 184, 0.6);
             }
         }
 
         @keyframes gradientShift {
-            0% { background-position: 0% 50%; }
-            50% { background-position: 100% 50%; }
-            100% { background-position: 0% 50%; }
+            0% {
+                background-position: 0% 50%;
+            }
+
+            50% {
+                background-position: 100% 50%;
+            }
+
+            100% {
+                background-position: 0% 50%;
+            }
         }
 
         /* Enhanced features with glassmorphism cards */
@@ -308,8 +411,15 @@
         }
 
         @keyframes featuresSlideUp {
-            0% { opacity: 0; transform: translateX(-50%) translateY(20px); }
-            100% { opacity: 1; transform: translateX(-50%) translateY(0); }
+            0% {
+                opacity: 0;
+                transform: translateX(-50%) translateY(20px);
+            }
+
+            100% {
+                opacity: 1;
+                transform: translateX(-50%) translateY(0);
+            }
         }
 
         .feature {
@@ -354,15 +464,18 @@
         }
 
         @keyframes iconPulseEnhanced {
-            0%, 100% { 
-                transform: scale(1); 
-                opacity: 0.8; 
-                box-shadow: 0 0 10px currentColor; 
+
+            0%,
+            100% {
+                transform: scale(1);
+                opacity: 0.8;
+                box-shadow: 0 0 10px currentColor;
             }
-            50% { 
-                transform: scale(1.3); 
-                opacity: 1; 
-                box-shadow: 0 0 20px currentColor; 
+
+            50% {
+                transform: scale(1.3);
+                opacity: 1;
+                box-shadow: 0 0 20px currentColor;
             }
         }
 
@@ -381,15 +494,21 @@
         }
 
         @keyframes versionFade {
-            0% { opacity: 0; }
-            100% { opacity: 1; }
+            0% {
+                opacity: 0;
+            }
+
+            100% {
+                opacity: 1;
+            }
         }
     </style>
 </head>
+
 <body>
     <!-- Animated particles background -->
     <div class="particles" id="particles"></div>
-    
+
     <!-- Progress bar as bottom border -->
     <div class="progress-border"></div>
 
@@ -412,7 +531,7 @@
         <!-- Loading animation -->
         <div class="loading-text" id="loadingText">Initializing physics engine...</div>
     </div>
-  
+
 
     <!-- Version -->
     <div class="version">v1.0.0</div>
@@ -428,15 +547,15 @@
                 const particle = document.createElement('div');
                 const type = particleTypes[Math.floor(Math.random() * particleTypes.length)];
                 particle.className = `particle ${type}`;
-                
+
                 // Random position
                 particle.style.left = Math.random() * 100 + '%';
                 particle.style.top = Math.random() * 100 + '%';
-                
+
                 // Random animation properties
                 particle.style.animationDelay = Math.random() * 8 + 's';
                 particle.style.animationDuration = (Math.random() * 6 + 6) + 's';
-                
+
                 particlesContainer.appendChild(particle);
             }
         }
@@ -462,14 +581,14 @@
                 messageIndex++;
                 loadingTextElement.style.opacity = '0';
                 loadingTextElement.style.transform = 'translateY(10px)';
-                
+
                 setTimeout(() => {
                     loadingTextElement.textContent = loadingMessages[messageIndex];
                     loadingTextElement.style.opacity = '1';
                     loadingTextElement.style.transform = 'translateY(0)';
                     loadingTextElement.style.transition = 'all 0.3s ease-out';
                 }, 150);
-                
+
                 setTimeout(updateLoadingText, 900);
             }
         }
@@ -489,12 +608,12 @@
 
         // Initialize enhanced splash screen
         createParticles();
-        
+
         // Start with typing effect for first message
         setTimeout(() => {
             typeWriterEffect(loadingTextElement, loadingMessages[0], 30);
         }, 500);
-        
+
         setTimeout(updateLoadingText, 1500);
 
         // Enhanced exit animation
@@ -505,4 +624,5 @@
         }, 6500);
     </script>
 </body>
+
 </html>
